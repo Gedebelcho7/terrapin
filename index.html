@@ -6,6 +6,7 @@
 <title>🌍 TerraPin — Quiz géo quotidien</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
 <style>
   :root{
     --bg:#0b1020; --bg2:#0e1530; --card:#151c38; --card2:#1b2347;
@@ -67,7 +68,7 @@
   .ach.locked{opacity:.38; filter:grayscale(1)}
   .ach .ico{font-size:1.6rem}
   .marks{font-size:1.7rem; letter-spacing:6px; margin:6px 0}
-  .flagimg{height:44px; border-radius:8px; border:1px solid var(--line); vertical-align:middle; margin-bottom:6px}
+  .flagimg{max-height:110px; max-width:280px; height:auto; border-radius:10px; border:1px solid var(--line); vertical-align:middle; margin-bottom:6px; pointer-events:none; background:#0e1630; padding:2px}
   input,select,textarea{background:var(--card2); border:1px solid var(--line); color:var(--txt);
     border-radius:10px; padding:10px 12px; font-size:.95rem; width:100%}
   textarea{min-height:70px; font-family:monospace; font-size:.75rem}
@@ -102,6 +103,7 @@
 <header>
   <div class="logo">🌍 TerraPin <small>quiz géo</small></div>
   <div class="hright">
+    <button class="chip" id="homeBtn" title="Retour à l'accueil">🏠</button>
     <span class="chip" id="seasonChip" title="Saison en cours">…</span>
     <button class="chip" id="profileBtn">👤 …</button>
   </div>
@@ -131,6 +133,8 @@
         <button class="btn" data-go="ach">Voir</button></div>
       <div class="card"><h2>📊 Stats</h2><p class="mut">Précision par catégorie, distance moyenne, tout est tracé.</p>
         <button class="btn" data-go="stats">Voir</button></div>
+      <div class="card"><h2>🎯 TerraQuiz</h2><p class="mut">Quiz et dilemmes « tu préfères », missions du jour, grades du Novice au Légende. Créés par vous, pour vous.</p>
+        <button class="btn" data-go="quiz">Ouvrir</button></div>
       <div class="card"><h2>❓ Comment jouer</h2><p class="mut">Règles, score, saisons, défis.</p>
         <button class="btn" id="helpBtn">Lire</button></div>
     </div>
@@ -191,6 +195,7 @@
         <option value="all">🎲 Mélange (tout)</option>
         <option value="pays">🗺️ Pays</option>
         <option value="drapeaux">🏳️ Drapeaux</option>
+        <option value="images">🖼️ Images</option>
         <option value="capitales">🏛️ Capitales</option>
         <option value="villes">🏙️ Villes</option>
         <option value="montagnes">🏔️ Montagnes</option>
@@ -237,7 +242,7 @@
       <label>Consigne (ce que le joueur devra cliquer)</label><input id="cPrompt" placeholder="Ex : Clique sur la ville où la Magna Carta a été signée" />
       <div class="row">
         <div style="flex:1"><label>Catégorie</label>
-          <select id="cCat"><option value="villes">🏙️ Villes</option><option value="pays">🗺️ Pays</option><option value="drapeaux">🏳️ Drapeaux</option>
+          <select id="cCat"><option value="villes">🏙️ Villes</option><option value="pays">🗺️ Pays</option><option value="drapeaux">🏳️ Drapeaux</option><option value="images">🖼️ Images</option>
           <option value="montagnes">🏔️ Montagnes</option><option value="fleuves">🌊 Fleuves &amp; lacs</option>
           <option value="monuments">🗿 Monuments</option><option value="iles">🏝️ Îles</option>
           <option value="france">🇫🇷 France</option><option value="capitales">🏛️ Capitales</option></select></div>
@@ -284,6 +289,16 @@
   <section id="screen-histdaily" class="screen">
     <button class="btn small backbtn" data-go="hist">← Menu</button>
     <div class="card" id="hdBox" style="margin-top:52px"></div>
+  </section>
+
+  <!-- TERRAQUIZ -->
+  <section id="screen-quiz" class="screen">
+    <button class="btn small backbtn" data-go="home">← Retour</button>
+    <div class="card" style="margin-top:52px">
+      <h1>🎯 TerraQuiz</h1>
+      <p class="mut">Quiz et dilemmes, missions du jour, grades. Tout est local, tout est gratuit.</p>
+      <div id="quizBox" style="margin-top:10px"></div>
+    </div>
   </section>
 
   <!-- CLASSEMENTS -->
@@ -353,7 +368,7 @@ function seasonInfo(){
 /* ================= DONNÉES ================= */
 const CATS={pays:"🗺️ Pays",capitales:"🏛️ Capitales",villes:"🏙️ Villes",montagnes:"🏔️ Montagnes",
   fleuves:"🌊 Fleuves & lacs",monuments:"🗿 Monuments",iles:"🏝️ Îles",france:"🇫🇷 France",
-  drapeaux:"🏳️ Drapeaux"};
+  drapeaux:"🏳️ Drapeaux",images:"🖼️ Images"};
 
 const CAPITALS=[
 ["Paris","France",48.8566,2.3522,1],["Madrid","Espagne",40.4168,-3.7038,1],["Rome","Italie",41.9028,12.4964,1],
@@ -542,9 +557,24 @@ france:[
 };
 
 const POOL=[];
+/* ---- Noms FR ➜ noms Natural Earth (pour les frontières) ---- */
+const GEO_EN={"France":"France","Espagne":"Spain","Italie":"Italy","Allemagne":"Germany","Portugal":"Portugal",
+"Royaume-Uni":"United Kingdom","Pologne":"Poland","Grèce":"Greece","Turquie":"Turkey","Égypte":"Egypt",
+"Maroc":"Morocco","Afrique du Sud":"South Africa","Inde":"India","Chine":"China","Japon":"Japan",
+"Australie":"Australia","Canada":"Canada","États-Unis":"United States of America","Mexique":"Mexico",
+"Brésil":"Brazil","Argentine":"Argentina","Suède":"Sweden","Norvège":"Norway","Finlande":"Finland",
+"Algérie":"Algeria","Nigeria":"Nigeria","Kenya":"Kenya","Éthiopie":"Ethiopia","Corée du Sud":"South Korea",
+"Vietnam":"Vietnam","Thaïlande":"Thailand","Indonésie":"Indonesia","Nouvelle-Zélande":"New Zealand",
+"Chili":"Chile","Pérou":"Peru","Colombie":"Colombia","Islande":"Iceland","Irlande":"Ireland",
+"Ukraine":"Ukraine","Roumanie":"Romania","Suisse":"Switzerland","Autriche":"Austria","Hongrie":"Hungary",
+"Tchéquie":"Czechia","Tunisie":"Tunisia","Kazakhstan":"Kazakhstan","Mongolie":"Mongolia","Oman":"Oman",
+"Bangladesh":"Bangladesh","Népal":"Nepal","Paraguay":"Paraguay","Bolivie":"Bolivia","Uruguay":"Uruguay",
+"Laos":"Laos","Cambodge":"Cambodia","Malaisie":"Malaysia","Sénégal":"Senegal","Tanzanie":"Tanzania",
+"Mozambique":"Mozambique","Angola":"Angola","Soudan":"Sudan","Libye":"Libya","Irak":"Iraq",
+"Syrie":"Syria","Israël":"Israel","Bhoutan":"Bhutan"};
 function addQ(o){POOL.push(Object.assign({type:"point"},o));}
 CAPITALS.forEach(c=>addQ({id:"cap-"+c[0],cat:"capitales",diff:c[4],prompt:"Clique sur "+c[0]+", capitale "+(c[1]==="États-Unis"?"des États-Unis":"de "+c[1]),lat:c[2],lon:c[3]}));
-COUNTRIES.forEach(c=>addQ({id:"pays-"+c[0],cat:"pays",diff:c[3],prompt:"Clique sur : "+c[0],lat:c[1],lon:c[2]}));
+COUNTRIES.forEach(c=>addQ({id:"pays-"+c[0],cat:"pays",diff:c[3],prompt:"Clique sur : "+c[0],lat:c[1],lon:c[2],en:GEO_EN[c[0]]||c[0]}));
 Object.keys(CURATED).forEach(cat=>CURATED[cat].forEach((q,i)=>addQ({id:cat+"-"+i,cat,diff:q.d,prompt:q.p,lat:q.lat,lon:q.lon,hint:q.hint,fact:q.fact})));
 /* ---- Drapeaux : montre un drapeau, clique le pays ---- */
 const FLAGS=[["France","fr",1],["Espagne","es",1],["Italie","it",1],["Allemagne","de",1],["Portugal","pt",1],
@@ -562,11 +592,74 @@ const FLAGS=[["France","fr",1],["Espagne","es",1],["Italie","it",1],["Allemagne"
 ["Soudan","sd",4],["Libye","ly",4],["Irak","iq",4],["Syrie","sy",4],["Israël","il",3],["Bhoutan","bt",4]];
 FLAGS.forEach(function(f){
   const c=COUNTRIES.filter(function(x){return x[0]===f[0];})[0];
-  if(c)addQ({id:"flag-"+f[1],cat:"drapeaux",diff:f[2],prompt:"🏳️ Quel pays a ce drapeau ? Clique sur son territoire.",flag:f[1],lat:c[1],lon:c[2]});
+  if(c)addQ({id:"flag-"+f[1],cat:"drapeaux",diff:f[2],prompt:"🏳️ Quel pays a ce drapeau ? Clique sur son territoire.",flag:f[1],lat:c[1],lon:c[2],en:GEO_EN[f[0]]||f[0]});
 });
+/* ---- Images : photo depuis Wikipédia (sans légende, non cliquable) ---- */
+const IMGQ=[
+ {t:"Tour Eiffel",lat:48.8584,lon:2.2945,d:1,hint:"La ville de l'amour.",fact:"Elle a été la plus haute structure du monde pendant 41 ans."},
+ {t:"Colisée",lat:41.8902,lon:12.4922,d:1,hint:"La ville aux sept collines.",fact:"Les combats de gladiateurs y ont duré presque 400 ans."},
+ {t:"Taj Mahal",lat:27.1751,lon:78.0421,d:2,hint:"Un mausolée en marbre blanc.",fact:"Il a été construit en l'honneur de l'épouse d'un empereur moghol."},
+ {t:"Statue de la Liberté",lat:40.6892,lon:-74.0445,d:1,hint:"Un cadeau de la France.",fact:"Elle a été offerte par la France en 1886."},
+ {t:"Christ Rédempteur",lat:-22.9519,lon:-43.2105,d:2,hint:"Au sommet d'une montagne brésilienne.",fact:"Il est frappé par la foudre environ 5 fois par an."},
+ {t:"Machu Picchu",lat:-13.1631,lon:-72.545,d:2,hint:"Une cité inca perchée.",fact:"Les Espagnols ne l'ont jamais trouvée."},
+ {t:"Grand Canyon",lat:36.107,lon:-112.113,d:2,hint:"Creusé par un fleuve américain.",fact:"Il révèle 2 milliards d'années de roches."},
+ {t:"Uluru",lat:-25.3444,lon:131.0369,d:3,hint:"Un rocher géant australien.",fact:"Il change de couleur au coucher du soleil."},
+ {t:"Mont Fuji",lat:35.3606,lon:138.7274,d:2,hint:"Le point culminant du Japon.",fact:"C'est un volcan encore actif."},
+ {t:"Sagrada Família",lat:41.4036,lon:2.1744,d:2,hint:"Une basilique inachevée.",fact:"En construction depuis 1882."},
+ {t:"Big Ben",lat:51.5007,lon:-0.1246,d:1,hint:"Au bord de la Tamise.",fact:"Big Ben est le nom de la cloche, pas de la tour."},
+ {t:"Mont Blanc",lat:45.8326,lon:6.8652,d:3,hint:"Le toit de l'Europe de l'Ouest.",fact:"Son altitude varie avec la neige : entre 4 800 et 4 900 m."},
+ {t:"Chutes du Niagara",lat:43.0828,lon:-79.0742,d:2,hint:"À la frontière américano-canadienne.",fact:"Environ 3 000 m³ d'eau y passent chaque seconde."},
+ {t:"Mont de la Table",lat:-33.9628,lon:18.4098,d:3,hint:"Il domine une ville d'Afrique du Sud.",fact:"Sa brume s'appelle la « nappe de la table »."},
+ {t:"Pétra",lat:30.3285,lon:35.4444,d:3,hint:"Une cité taillée dans la roche.",fact:"Elle a été redécouverte en 1812 par un explorateur occidental."},
+ {t:"Burj Khalifa",lat:25.1972,lon:55.2744,d:2,hint:"La plus haute tour du monde.",fact:"828 m de haut, record absolu."},
+ {t:"Golden Gate Bridge",lat:37.8199,lon:-122.4783,d:2,hint:"Un pont rouge de la côte ouest américaine.",fact:"Sa couleur officielle s'appelle « rouge international »."},
+ {t:"Stonehenge",lat:51.1789,lon:-1.8262,d:2,hint:"Des pierres dressées préhistoriques.",fact:"Certaines pierres ont été transportées sur plus de 250 km."},
+ {t:"Mont Saint-Michel",lat:48.6361,lon:-1.5115,d:2,hint:"Une abbaye entourée par la mer.",fact:"La marée y monte à la vitesse d'un cheval au galop."},
+ {t:"Moai",lat:-27.1127,lon:-109.3497,d:4,hint:"Une île ultra-isolée du Pacifique.",fact:"L'île de Pâques est l'un des endroits les plus isolés du monde."}
+];
+IMGQ.forEach(function(q,i){addQ({id:"img-"+i,cat:"images",diff:q.d,prompt:"🖼️ Regarde l'image en haut : où ça se trouve ? Clique sur la carte.",wiki:q.t,lat:q.lat,lon:q.lon,hint:q.hint,fact:q.fact});});
+/* ---- Frontières : chargement des polygones (world-atlas 110m, CDN gratuit sans clé) ---- */
+let GEO={loaded:false,loading:false,byName:{}};
+function loadBorders(){
+  if(GEO.loading||GEO.loaded)return; GEO.loading=true;
+  try{
+    fetch("https://unpkg.com/world-atlas@2/countries-110m.json").then(function(r){return r.json();}).then(function(topo){
+      if(typeof topojson==="undefined")return;
+      topojson.feature(topo,topo.objects.countries).features.forEach(function(f){
+        const n=f.properties&&f.properties.name;
+        if(n){(GEO.byName[n]=GEO.byName[n]||[]).push(f);}
+      });
+      GEO.loaded=true;
+    }).catch(function(){GEO.loading=false;});
+  }catch(e){GEO.loading=false;}
+}
+function ptInRing(pt,ring){let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>pt.lat)!==(yj>pt.lat))&&(pt.lng<(xj-xi)*(pt.lat-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;}
+function borderDistKm(q,pt){
+  if(!GEO.loaded||!q.en)return null;
+  const feats=GEO.byName[q.en]; if(!feats)return null;
+  for(let k=0;k<feats.length;k++){
+    const g=feats[k].geometry, polys=g.type==="Polygon"?[g.coordinates]:g.coordinates;
+    for(let p=0;p<polys.length;p++){if(ptInRing(pt,polys[p][0]))return 0;}
+  }
+  let best=Infinity;
+  for(let k=0;k<feats.length;k++){
+    const g=feats[k].geometry, polys=g.type==="Polygon"?[g.coordinates]:g.coordinates;
+    for(let p=0;p<polys.length;p++)for(let r=0;r<polys[p].length;r++)for(let v=0;v<polys[p][r].length;v++){
+      const c=polys[p][r][v];
+      const d=haversine({lat:pt.lat,lon:pt.lng},{lat:c[1],lon:c[0]});
+      if(d<best)best=d;
+    }
+  }
+  return best;
+}
 
-const DIFF={1:{base:"osm",zoom:[2,10],tol:450,timer:90},2:{base:"positron",zoom:[2,7],tol:250,timer:60},
-            3:{base:"sat",zoom:[2,5],tol:150,timer:45},4:{base:"sat",zoom:[2,4],tol:90,timer:30}};
+const DIFF={1:{base:"osm",zoom:[2,10],tol:450,timer:45},2:{base:"positron",zoom:[2,7],tol:250,timer:30},
+            3:{base:"sat",zoom:[2,5],tol:150,timer:22},4:{base:"sat",zoom:[2,4],tol:90,timer:15}};
 
 /* ================= HISTOIRE : DONNÉES ================= */
 // [année, titre, texte SANS date]
@@ -761,6 +854,256 @@ function checkAch(){
   save();
 }
 
+/* ================= TERRAQUIZ : quiz & dilemmes ================= */
+const GRADES=[{n:"Novice",xp:0,ico:"🌱"},{n:"Apprenti",xp:100,ico:"🛠️"},{n:"Connaisseur",xp:300,ico:"🧠"},
+{n:"Artisan",xp:700,ico:"🎨"},{n:"Maître",xp:1500,ico:"🎓"},{n:"Sage",xp:3000,ico:"🦉"},{n:"Légende",xp:5000,ico:"🌟"}];
+function gradeFor(xp){let g=GRADES[0];GRADES.forEach(function(x){if(xp>=x.xp)g=x;});return g;}
+const QZ_QUIZ=[
+["Quel est le plus grand océan du monde ?","Pacifique",["Atlantique","Indien","Arctique"],"Géographie"],
+["Combien de pattes a une araignée ?","8",["6","10","12"],"Animaux"],
+["Quelle planète est la plus proche du Soleil ?","Mercure",["Vénus","Mars","La Terre"],"Sciences"],
+["En quelle année l'homme a-t-il marché sur la Lune pour la première fois ?","1969",["1965","1972","1961"],"Histoire"],
+["Quel est l'animal terrestre le plus rapide ?","Guépard",["Lion","Antilope","Cheval"],"Animaux"],
+["Combien de joueurs par équipe sur un terrain de football ?","11",["10","12","9"],"Sport"],
+["Quelle est la couleur du sang d'un poulpe ?","Bleu",["Vert","Rouge","Transparent"],"Animaux"],
+["Quelle est la capitale de l'Australie ?","Canberra",["Sydney","Melbourne","Perth"],"Géographie"],
+["Combien de cordes a une guitare classique ?","6",["4","5","7"],"Musique"],
+["Dans quel jeu vidéo trouve-t-on des Creepers ?","Minecraft",["Fortnite","Roblox","Terraria"],"Jeux vidéo"],
+["Quelle vitamine le soleil nous aide-t-il à produire ?","Vitamine D",["Vitamine C","Vitamine A","Vitamine B12"],"Sciences"],
+["Combien de côtés a un hexagone ?","6",["5","7","8"],"Culture G"],
+["Qui a peint La Nuit étoilée ?","Vincent van Gogh",["Claude Monet","Pablo Picasso","Léonard de Vinci"],"Arts"],
+["Quelle est la vitesse de la lumière (approx.) ?","300 000 km/s",["300 000 m/s","150 000 km/s","1 million de km/s"],"Sciences"],
+["Combien de temps dure un match de rugby (hors prolongations) ?","80 minutes",["60 minutes","90 minutes","100 minutes"],"Sport"],
+["Quel est le plus grand désert du monde ?","L'Antarctique",["Le Sahara","Le Gobi","L'Atacama"],"Géographie"],
+["Combien d'os a le corps humain adulte ?","206",["180","230","156"],"Sciences"],
+["Quelle maison de Poudlard a un serpent pour emblème ?","Serpentard",["Gryffondor","Poufsouffle","Serdaigle"],"Cinéma & livres"],
+["Quel pays mange le plus de chocolat par habitant ?","La Suisse",["La France","Les États-Unis","La Belgique"],"Bouffe"],
+["Combien de touches a un piano classique ?","88",["76","92","64"],"Musique"],
+["Quelle mer est la plus salée ?","La mer Morte",["La mer Rouge","La mer Baltique","La mer des Caraïbes"],"Géographie"],
+["Combien de cœurs a une pieuvre ?","3",["1","2","4"],"Animaux"],
+["Quel est le symbole chimique de l'or ?","Au",["Or","Ag","Fe"],"Sciences"],
+["Quel pays a gagné la Coupe du monde de foot 2018 ?","La France",["La Croatie","Le Brésil","L'Allemagne"],"Sport"],
+["Combien de temps met la Terre pour tourner sur elle-même ?","23 h 56",["24 h exactement","22 h 30","25 h"],"Sciences"],
+["Quelle est la monnaie du Japon ?","Le yen",["Le won","Le yuan","Le dollar"],"Culture G"]
+];
+const QZ_DIL=[
+["Bras en mousse","Jambes en mousse"],
+["Ne plus jamais manger de fromage","Ne plus jamais manger de dessert"],
+["Pouvoir voler à 10 km/h max","Être invisible 10 secondes par jour"],
+["Vivre sans internet","Vivre sans musique"],
+["Toujours dire ce que tu penses","Ne jamais pouvoir parler de toi"],
+["Pizza ananas autorisée uniquement","Pizza sans fromage à vie"],
+["Voyager dans le passé","Voyager dans le futur"],
+["Être hyper riche mais connu de tous","Être discret et bien à l'aise"],
+["Ne plus jamais avoir sommeil","Ne plus jamais avoir faim"],
+["Parler toutes les langues","Jouer parfaitement de tous les instruments"],
+["1 cheval de la taille d'un canard","100 canards de la taille d'un cheval"],
+["Lire dans les pensées","Voir le futur sans pouvoir le changer"],
+["Toujours avoir 2 heures d'avance","Toujours avoir 2 heures de retard"],
+["Perdre ton téléphone 1 mois","Perdre ton ordi 1 mois"],
+["Manger le même plat à vie","Ne jamais manger 2 fois le même plat"],
+["Vacances toujours à la montagne","Vacances toujours à la plage"],
+["Ne plus jamais utiliser d'emoji","Ne plus jamais utiliser de majuscules"],
+["Être célèbre pour un truc que tu n'as pas fait","Jamais reconnu pour ce que tu as fait"]
+];
+let qzTab="daily",qzPlay=null;
+function ensureQz(p){if(!p.qz)p.qz={pts:0,ok:0,n:0,answered:{},dil:{},daily:{},created:0};return p.qz;}
+function qzUser(){if(!db.qzUser)db.qzUser=[];return db.qzUser;}
+function qzAll(){return QZ_QUIZ.map(function(r,i){return {id:"pack-"+i,type:"quiz",q:r[0],good:r[1],bads:r[2],theme:r[3],by:null};}).concat(qzUser());}
+function qzDilAll(){return QZ_DIL.map(function(r,i){return {id:"dil-"+i,type:"dil",a:r[0],b:r[1],by:null};}).concat(qzUser().filter(function(x){return x.type==="dil";}));}
+function qzDaySt(p){const q=ensureQz(p),dk=todayKey();
+  if(!q.daily[dk])q.daily[dk]={n:0,okQuiz:0,created:0,m1:false,m2:false,m3:false};
+  return q.daily[dk];}
+function qzXP(p,n){
+  const q=ensureQz(p), before=gradeFor(q.pts).n;
+  q.pts+=n;
+  const after=gradeFor(q.pts).n;
+  if(after!==before)toast(after.ico+" Grade TerraQuiz : "+after.n+" !");
+  checkAch(); save();
+}
+function qzDaily(){
+  const rng=mulberry32(hashCode("qz-"+todayKey()));
+  const quiz=QZ_QUIZ[Math.floor(rng()*QZ_QUIZ.length)];
+  const dil=QZ_DIL[Math.floor(rng()*QZ_DIL.length)];
+  return {quiz:{q:quiz[0],good:quiz[1],bads:quiz[2],theme:quiz[3]},dil:dil};
+}
+function qzAffinity(){
+  const me=P(); if(!me||!me.qz)return [];
+  return Object.keys(db.profiles).filter(function(n){return n!==db.current;}).map(function(n){
+    const oq=db.profiles[n].qz; let common=0,same=0;
+    if(oq)Object.keys(me.qz.dil).forEach(function(k){if(oq.dil[k]!==undefined){common++;if(oq.dil[k]===me.qz.dil[k])same++;}});
+    return {n:n,p:common?Math.round(same/common*100):null};
+  }).filter(function(x){return x.p!==null;}).sort(function(a,b){return b.p-a.p;});
+}
+function renderQuiz(){
+  const box=$("#quizBox");
+  const tabs=[["daily","📅 Défi du jour"],["quiz","🧠 Quiz"],["dilemme","🤔 Dilemmes"],["creer","✨ Créer"],["missions","🎯 Missions"]];
+  box.innerHTML="<div class='row' style='flex-wrap:wrap'>"+tabs.map(function(t){
+    return "<button class='btn small"+(qzTab===t[0]?" gold":"")+"' data-qtab='"+t[0]+"'>"+t[1]+"</button>";
+  }).join("")+"</div><div id='qzBody' style='margin-top:14px'></div>";
+  box.querySelectorAll("[data-qtab]").forEach(function(b){b.onclick=function(){qzTab=b.dataset.qtab;renderQuiz();};});
+  const body=$("#qzBody");
+  if(!P()){body.innerHTML="<p class='mut'>Choisis un profil d'abord (en haut à droite) pour gagner des grades !</p>";return;}
+  if(qzTab==="daily")qzRenderDaily(body);
+  else if(qzTab==="quiz")qzRenderQuiz(body);
+  else if(qzTab==="dilemme")qzRenderDil(body);
+  else if(qzTab==="creer")qzRenderCreate(body);
+  else qzRenderMissions(body);
+}
+function qzRenderDaily(body){
+  const p=P(),q=ensureQz(p),d=qzDaily(),st=qzDaySt(p);
+  const doneQ=st.qa!==undefined, doneD=st.da!==undefined;
+  let html="<h2>📅 Défis du jour</h2>";
+  if(!doneQ){
+    const opts=d.quiz.bads.concat([d.quiz.good]).sort(function(){return Math.random()-0.5;});
+    st._dopts=opts;
+    html+="<div class='card' style='margin-top:10px'><b>"+esc(d.quiz.q)+"</b><div style='margin-top:8px'>"
+      +opts.map(function(o,i){return "<button class='btn small' style='display:block;width:100%;margin:4px 0' data-dq='"+i+"'>"+esc(o)+"</button>";}).join("")+"</div></div>";
+  } else html+="<div class='card' style='margin-top:10px'>✅ Question du jour faite — "+(st.qok?"bonne réponse 👍":"raté 😅")+" (+"+st.qxp+" XP)</div>";
+  if(!doneD){
+    html+="<div class='card' style='margin-top:10px'><b>🤔 Tu préfères : "+esc(d.dil[0])+" ou "+esc(d.dil[1])+" ?</b>"
+      +"<div style='margin-top:8px'><button class='btn small' data-dd='0'>"+esc(d.dil[0])+"</button> <button class='btn small' data-dd='1'>"+esc(d.dil[1])+"</button></div></div>";
+  } else html+="<div class='card' style='margin-top:10px'>✅ Dilemme du jour fait (+"+st.dxp+" XP)</div>";
+  const g=gradeFor(q.pts);
+  html+="<div class='mut' style='margin-top:10px'>"+g.ico+" "+g.n+" · "+q.pts+" XP</div>";
+  body.innerHTML=html;
+  body.querySelectorAll("[data-dq]").forEach(function(b){b.onclick=function(){
+    const val=st._dopts[parseInt(b.dataset.dq,10)];
+    const ok=val===d.quiz.good;
+    st.qa=val; st.qok=ok; st.qxp=ok?25:5; st.n++;
+    if(ok)q.ok++;
+    q.n++;
+    qzXP(p,st.qxp);
+    toast(ok?"✅ +25 XP !":"😅 +5 XP de participation");
+    save(); renderQuiz();
+  };});
+  body.querySelectorAll("[data-dd]").forEach(function(b){b.onclick=function(){
+    st.da=parseInt(b.dataset.dd,10); st.dxp=10; st.n++;
+    qzXP(p,10);
+    toast("🤔 Choix noté ! +10 XP");
+    save(); renderQuiz();
+  };});
+}
+function qzRenderQuiz(body){
+  const all=qzAll();
+  if(!qzPlay||qzPlay.done||qzPlay.i>=qzPlay.list.length){
+    qzPlay={list:all.slice().sort(function(){return Math.random()-0.5;}),i:0,pts:0,done:false};
+  }
+  const item=qzPlay.list[qzPlay.i], q=ensureQz(P());
+  const opts=item.bads.concat([item.good]).sort(function(){return Math.random()-0.5;});
+  body.innerHTML="<h2>🧠 Quiz"+(item.theme?" · "+esc(item.theme):"")+"</h2>"
+   +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
+   +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
+   +"<div style='margin-top:8px'>"+opts.map(function(o,i){return "<button class='btn small' style='display:block;width:100%;margin:4px 0' data-qo='"+i+"'>"+esc(o)+"</button>";}).join("")+"</div>"
+   +"<div id='qzFb' style='margin-top:8px'></div></div>"
+   +"<div class='mut' style='margin-top:8px'>Question "+(qzPlay.i+1)+"/"+qzPlay.list.length+" · session "+qzPlay.pts+" XP</div>";
+  body.querySelectorAll("[data-qo]").forEach(function(b){b.onclick=function(){
+    const val=opts[parseInt(b.dataset.qo,10)], ok=val===item.good;
+    const q2=ensureQz(P()), first=!q2.answered[item.id], dst=qzDaySt(P());
+    q2.answered[item.id]=ok?1:2; q2.n++; if(ok)q2.ok++;
+    dst.n++; if(ok)dst.okQuiz++;
+    const xp=ok?(first?15:3):(first?5:0);
+    qzPlay.pts+=xp; qzXP(P(),xp);
+    body.querySelectorAll("[data-qo]").forEach(function(x){
+      x.disabled=true;
+      if(opts[parseInt(x.dataset.qo,10)]===item.good)x.style.borderColor="var(--gold)";
+    });
+    $("#qzFb").innerHTML=(ok?"✅ Bonne réponse !":"❌ Raté, c'était : <b>"+esc(item.good)+"</b>")+" (+"+xp+" XP) "
+      +"<button class='btn small primary' id='qzNext'>Suivante ➜</button>";
+    $("#qzNext").onclick=function(){qzPlay.i++;renderQuiz();};
+  };});
+}
+function qzRenderDil(body){
+  const all=qzDilAll(), item=all[Math.floor(Math.random()*all.length)];
+  const q=ensureQz(P()), first=q.dil[item.id]===undefined;
+  body.innerHTML="<h2>🤔 Dilemmes</h2>"
+   +"<div class='card' style='margin-top:10px'><b>Tu préfères : "+esc(item.a)+"</b> ou <b>"+esc(item.b)+"</b> ?"
+   +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
+   +"<div style='margin-top:8px'><button class='btn small' data-da='0'>"+esc(item.a)+"</button> <button class='btn small' data-da='1'>"+esc(item.b)+"</button></div>"
+   +"<div id='qzDilFb' style='margin-top:8px'></div></div>"
+   +"<div class='mut' style='margin-top:8px'>"+(first?"+10 XP pour ton premier vote sur ce dilemme":"déjà voté (tu peux changer d'avis, sans XP)")+"</div>";
+  body.querySelectorAll("[data-da]").forEach(function(b){b.onclick=function(){
+    const c=parseInt(b.dataset.da,10), q2=ensureQz(P()), first2=q2.dil[item.id]===undefined, dst=qzDaySt(P());
+    q2.dil[item.id]=c; dst.n++;
+    if(first2)qzXP(P(),10); else save();
+    const others=Object.keys(db.profiles).filter(function(n){return n!==db.current;});
+    let twin=null;
+    others.forEach(function(n){
+      const oq=db.profiles[n].qz;
+      if(oq&&oq.dil[item.id]===c)twin=n;
+    });
+    let html="🗳️ Vote noté"+(first2?" (+10 XP)":"")+". ";
+    if(twin)html+="🎭 "+esc(twin)+" a choisi pareil que toi !";
+    else if(others.length)html+="Personne n'a (encore) choisi pareil.";
+    else html+="Crée un autre profil pour comparer vos réponses !";
+    $("#qzDilFb").innerHTML=html+" <button class='btn small primary' id='qzDilNext'>Autre dilemme ➜</button>";
+    $("#qzDilNext").onclick=function(){renderQuiz();};
+  };});
+}
+function qzRenderCreate(body){
+  body.innerHTML="<h2>✨ Créer une question</h2>"
+   +"<div class='card' style='margin-top:10px'>"
+   +"<label>Type</label><select id='qzType'><option value='quiz'>🧠 Quiz (bonne réponse)</option><option value='dil'>🤔 Dilemme (tu préfères)</option></select>"
+   +"<div id='qzForm'></div>"
+   +"<button class='btn primary' id='qzSave' style='margin-top:10px'>💾 Publier (+25 XP)</button></div>"
+   +"<div class='mut' style='margin-top:8px'>Tes créations sont jouables par tous les profils de cet appareil.</div>";
+  function form(){
+    if($("#qzType").value==="quiz"){
+      $("#qzForm").innerHTML="<label>Question</label><input id='qzQ' placeholder='Ex : Quelle est la capitale du Japon ?'/>"
+       +"<label>Bonne réponse</label><input id='qzG' placeholder='Tokyo'/>"
+       +"<label>Mauvaises réponses (séparées par un point-virgule)</label><input id='qzB' placeholder='Osaka;Kyoto;Nagoya'/>"
+       +"<label>Thème (facultatif)</label><input id='qzT' placeholder='Géographie'/>";
+    } else {
+      $("#qzForm").innerHTML="<label>Choix A</label><input id='qzA' placeholder='Bras en mousse'/>"
+       +"<label>Choix B</label><input id='qzB' placeholder='Jambes en mousse'/>";
+    }
+  }
+  form(); $("#qzType").onchange=form;
+  $("#qzSave").onclick=function(){
+    const t=$("#qzType").value;
+    if(t==="quiz"){
+      const qq=$("#qzQ").value.trim(), g=$("#qzG").value.trim(),
+            bads=$("#qzB").value.split(";").map(function(s){return s.trim();}).filter(Boolean),
+            th=$("#qzT").value.trim()||"Perso";
+      if(!qq||!g||bads.length<1){toast("Il faut une question, une bonne réponse et au moins 1 mauvaise !");return;}
+      qzUser().push({id:"user-"+Date.now(),type:"quiz",q:qq,good:g,bads:bads,theme:th,by:db.current});
+    } else {
+      const a=$("#qzA").value.trim(), b=$("#qzB").value.trim();
+      if(!a||!b){toast("Il faut deux choix !");return;}
+      qzUser().push({id:"userd-"+Date.now(),type:"dil",a:a,b:b,by:db.current});
+    }
+    const p=P(), q=ensureQz(p), dst=qzDaySt(p);
+    q.created++; q.n++; dst.created++;
+    qzXP(p,25);
+    toast("✨ Publié ! +25 XP");
+    save(); renderQuiz();
+  };
+}
+function qzRenderMissions(body){
+  const p=P(), st=qzDaySt(p), q=ensureQz(p);
+  const missions=[
+   {id:"m1",txt:"Répondre à 5 questions aujourd'hui",goal:5,xp:50,prog:function(){return st.n;}},
+   {id:"m2",txt:"Réussir 3 quiz aujourd'hui",goal:3,xp:50,prog:function(){return st.okQuiz;}},
+   {id:"m3",txt:"Créer 1 question aujourd'hui",goal:1,xp:75,prog:function(){return st.created;}}
+  ];
+  let html="<h2>🎯 Missions du jour</h2>";
+  missions.forEach(function(m){
+    if(!st[m.id]&&m.prog()>=m.goal){st[m.id]=true;qzXP(p,m.xp);toast("🎯 Mission accomplie : +"+m.xp+" XP !");}
+    const done=!!st[m.id], pc=Math.min(100,Math.round(Math.min(m.prog(),m.goal)/m.goal*100));
+    html+="<div class='card' style='margin-top:8px'><div class='row'><span>"+(done?"✅ ":"⬜ ")+m.txt+"</span><span class='spacer'></span><b>+"+m.xp+" XP</b></div>"
+     +"<div class='timer' style='margin-top:6px'><div style='width:"+pc+"%;background:linear-gradient(90deg,#34d399,#22d3ee)'></div></div>"
+     +"<div class='mut' style='margin-top:4px'>"+Math.min(m.prog(),m.goal)+" / "+m.goal+"</div></div>";
+  });
+  const g=gradeFor(q.pts);
+  html+="<h2 style='margin-top:16px'>🏅 Ton grade : "+g.ico+" "+g.n+" ("+q.pts+" XP)</h2>"
+   +"<div class='mut'>"+GRADES.map(function(x){return (q.pts>=x.xp?"✅":"⬜")+" "+x.ico+" "+x.n;}).join(" · ")+"</div>";
+  const rank=Object.keys(db.profiles).map(function(n){return {n:n,pts:(db.profiles[n].qz&&db.profiles[n].qz.pts)||0};}).sort(function(a,b){return b.pts-a.pts;});
+  html+="<h2 style='margin-top:16px'>🏆 Classement TerraQuiz</h2><div class='mut'>"+rank.map(function(r,i){return (i+1)+". "+esc(r.n)+" — "+r.pts+" XP";}).join("<br>")+"</div>";
+  const aff=qzAffinity();
+  if(aff.length)html+="<h2 style='margin-top:16px'>🎭 Affinités dilemmes</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % de réponses pareilles";}).join("<br>")+"</div>";
+  body.innerHTML=html;
+}
+
 /* ================= NAVIGATION ================= */
 function show(id){
   document.querySelectorAll(".screen").forEach(function(s){s.classList.remove("active");});
@@ -774,10 +1117,12 @@ function show(id){
   if(id==="ach")renderAch();
   if(id==="stats")renderStats();
   if(id==="hist")renderHist();
+  if(id==="quiz")renderQuiz();
 }
 document.addEventListener("click",function(e){
   const b=e.target.closest("[data-go]"); if(b){stopTimers();show(b.dataset.go);}
 });
+$("#homeBtn").onclick=function(){stopTimers();show("home");};
 
 /* ================= CARTE ================= */
 let map=null,cmap=null;
@@ -797,6 +1142,8 @@ function initMap(){
   if(map||typeof L==="undefined")return;
   map=L.map("map",{worldCopyJump:true,zoomControl:true}).setView([20,0],2);
   setBase("osm");
+  map.on("zoomend",function(){if(game&&map.getZoom()>(game.maxZoom||0))game.maxZoom=map.getZoom();});
+  loadBorders();
   map.on("click",function(e){
     if(!game||!$("#feedback").classList.contains("hidden"))return;
     game.pin=e.latlng;
@@ -835,7 +1182,7 @@ function startGame(questions,mode,meta){
 function loadQuestion(){
   stopTimers();
   const q=game.questions[game.i], cfg=DIFF[q.diff];
-  game.pin=null; game.hintUsed=false;
+  game.pin=null; game.hintUsed=false; game.maxZoom=cfg.zoom[0]; game.zoomBase=cfg.zoom[0];
   setBase(cfg.base);
   map.setMinZoom(cfg.zoom[0]); map.setMaxZoom(cfg.zoom[1]);
   map.setView([20,0],cfg.zoom[0]);
@@ -843,6 +1190,10 @@ function loadQuestion(){
   game.layerGroup=L.layerGroup().addTo(map);
   $("#qPrompt").textContent=q.prompt;
   if(q.flag){$("#qFlag").src="https://flagcdn.com/w160/"+q.flag+".png";$("#qFlag").classList.remove("hidden");}
+  else if(q.wiki){
+    $("#qFlag").classList.remove("hidden"); $("#qFlag").removeAttribute("src");
+    wikiThumb(q.wiki).then(function(s){if(s&&game&&game.questions[game.i]===q)$("#qFlag").src=s;});
+  }
   else $("#qFlag").classList.add("hidden");
   $("#qCat").textContent=CATS[q.cat]||q.cat;
   $("#qDiff").textContent="●".repeat(q.diff)+"○".repeat(4-q.diff);
@@ -884,6 +1235,7 @@ function multsFor(){
   if(game.mode==="daily"&&P())m*=1+0.02*Math.min(P().streak,25);
   m*=1+0.05*Math.min(game.combo,10);
   if(game.hintUsed)m*=0.7;
+  if(game.zoomBase&&game.maxZoom>game.zoomBase)m*=Math.max(0.6,1-0.05*(game.maxZoom-game.zoomBase));
   return m;
 }
 function submitAnswer(timeout){
@@ -891,7 +1243,8 @@ function submitAnswer(timeout){
   const q=game.questions[game.i], cfg=DIFF[q.diff];
   $("#guessBtn").disabled=true;
   const answered=!!game.pin;
-  const dist=answered?haversine({lat:game.pin.lat,lon:game.pin.lng},{lat:q.lat,lon:q.lon}):Infinity;
+  let dist=answered?haversine({lat:game.pin.lat,lon:game.pin.lng},{lat:q.lat,lon:q.lon}):Infinity;
+  if(answered){const bd=borderDistKm(q,{lat:game.pin.lat,lng:game.pin.lng});if(bd!==null)dist=bd;}
   const prec=answered?computePrec(dist,cfg.tol):0;
   const m=multsFor();
   const pts=answered?Math.round(1000*prec*(0.5+0.5*(game.timeLeft/game.timeTotal))*m):0;
@@ -920,7 +1273,10 @@ function submitAnswer(timeout){
   const label=prec>=1?"🎯 Parfait !":prec>=.9?"🔥 Presque parfait":prec>=.6?"👍 Pas mal":answered?"😅 À côté…":"💀 Sans réponse";
   $("#fbTitle").textContent=label;
   $("#fbPts").textContent="+"+fmt(pts)+" pts";
-  $("#fbDist").textContent=answered?("Distance : "+fmt(Math.round(dist))+" km"+(game.hintUsed?" · indice utilisé (-30 %)":"")):"Temps écoulé sans réponse.";
+  const inBorder=answered&&dist===0&&(q.cat==="pays"||q.cat==="drapeaux");
+  const zpen=(game.zoomBase&&game.maxZoom>game.zoomBase)?Math.round((1-Math.max(0.6,1-0.05*(game.maxZoom-game.zoomBase)))*100):0;
+  $("#fbDist").textContent=answered?(inBorder?"🎯 Dans les frontières !":"Distance : "+fmt(Math.round(dist))+" km"
+    +(game.hintUsed?" · indice utilisé (-30 %)":"")+(zpen?" · zoom utilisé (-"+zpen+" %)":"")):"Temps écoulé sans réponse.";
   $("#fbFact").textContent=q.fact?("🌍 Le savais-tu ? "+q.fact):"";
   $("#nextBtn").textContent=(game.i+1<game.questions.length)?"Suivante ➜":"Terminer 🏁";
   $("#feedback").classList.remove("hidden");
@@ -1289,6 +1645,18 @@ function ensureWikiDeck(statusCb){
   });
 }
 function DECK(){return (WDECK&&WDECK.length>=60)?WDECK:EVENTS;}
+async function wikiThumb(title){
+  const db=wikiCache(); db.imgs=db.imgs||{};
+  if(db.imgs[title])return db.imgs[title];
+  try{
+    const r=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title));
+    if(!r.ok)return null;
+    const j=await r.json();
+    const src=(j.originalimage&&j.originalimage.source)||(j.thumbnail&&j.thumbnail.source);
+    if(src){db.imgs[title]=src;wikiSave(db);}
+    return src||null;
+  }catch(e){return null;}
+}
 async function loadEphem(){
   const d=new Date(), m=d.getMonth()+1, day=d.getDate();
   const cards=await fetchWikiDay(m,day);
@@ -1356,8 +1724,44 @@ function buildHistDaily(){
   }
   return out;
 }
-function startHistDaily(){
-  hd={qs:buildHistDaily(),i:0,pts:0,results:[],timeLeft:30,total:30,locked:false};
+async function startHistDaily(){
+  const dateKey=todayKey(), d=new Date();
+  const cards=await fetchWikiDay(d.getMonth()+1,d.getDate());
+  let qs=null;
+  if(cards&&cards.length>=8){
+    /* sélection déterministe : les mêmes 5 questions pour tout le monde */
+    const top=cards.slice().sort(function(a,b){return hashCode(a.t)-hashCode(b.t);}).slice(0,30);
+    const rng=mulberry32(hashCode("histd-"+dateKey));
+    const used=new Set(),out=[];
+    function mkOpts(ev){
+      const opts=[ev.y]; let g2=0;
+      while(opts.length<4&&g2++<80){
+        let y;
+        if(rng()<0.55)y=ev.y+Math.floor(rng()*60)-30;
+        else y=top[Math.floor(rng()*top.length)].y;
+        if(y===ev.y)y=ev.y+1+Math.floor(rng()*8);
+        if(opts.indexOf(y)<0)opts.push(y);
+      }
+      for(let i=opts.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const tmp=opts[i];opts[i]=opts[j];opts[j]=tmp;}
+      return opts;
+    }
+    /* Q1 : « C'est arrivé un… » (événement du jour) */
+    const todayEv=top[Math.floor(rng()*Math.min(10,top.length))];
+    if(todayEv){
+      used.add(todayEv.t);
+      const dLabel=d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
+      out.push({t:"C'est arrivé un "+dLabel+" : "+todayEv.t,x:todayEv.x,y:todayEv.y,opts:mkOpts(todayEv)});
+    }
+    let guard=0;
+    while(out.length<5&&guard++<300){
+      const e=top[Math.floor(rng()*top.length)];
+      if(used.has(e.t))continue; used.add(e.t);
+      out.push({t:e.t,x:e.x,y:e.y,opts:mkOpts(e)});
+    }
+    if(out.length===5)qs=out;
+  }
+  if(!qs)qs=buildHistDaily();
+  hd={qs:qs,i:0,pts:0,results:[],timeLeft:30,total:30,locked:false};
   show("histdaily"); renderHdQ();
 }
 function renderHdQ(){
@@ -1431,8 +1835,8 @@ function finishHistDaily(){
 /* ---- Frise royale (battle royale) ---- */
 let frise=null,friseTimer=null;
 function stopFriseTimer(){if(friseTimer){clearInterval(friseTimer);friseTimer=null;}}
-function shuffledIndices(){
-  const a=EVENTS.map(function(_,i){return i;});
+function shufIdx(arr){
+  const a=arr.map(function(_,i){return i;});
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
   return a;
 }
@@ -1442,20 +1846,27 @@ function renderFriseSetup(){
    +names.map(function(n){return "<label style='display:flex;gap:8px;align-items:center;margin:6px 0'><input type='checkbox' class='fp' value='"+esc(n)+"' checked style='width:auto'/> "+esc(n)+"</label>";}).join("")
    +"<div class='row' style='margin-top:10px'><button class='btn gold' id='friseGo'>Lancer ➜</button><button class='btn' data-go='hist'>Annuler</button></div>";
   $("#friseGo").onclick=function(){
-    const sel=Array.prototype.slice.call(document.querySelectorAll(".fp:checked")).map(function(c){return c.value;});
-    if(sel.length<2){toast("Il faut au moins 2 joueurs !");return;}
-    startFrise(sel);
+    try{
+      const sel=Array.prototype.slice.call(document.querySelectorAll(".fp:checked")).map(function(c){return c.value;});
+      if(sel.length<2){toast("Il faut au moins 2 joueurs !");return;}
+      prepareFrise(sel);
+    }catch(err){toast("Oups, la frise n'a pas pu démarrer… Réessaie !");}
   };
+}
+function prepareFrise(names){
+  $("#friseBox").innerHTML="<h2>⚔️ Nouvelle frise</h2><p class='mut' id='wikiLoad'>Récupération des événements depuis Wikipédia…</p>";
+  ensureWikiDeck(function(d,t){const el=$("#wikiLoad");if(el)el.textContent="Récupération des événements depuis Wikipédia… ("+d+"/"+t+")";})
+   .then(function(){startFrise(names);});
 }
 function startFrise(names){
   const h=ensureHist(P()); h.rounds++;
   frise={players:names.slice(),alive:{},hands:{},limits:{},powers:{},sablier:{},mistakeFree:{},roundPts:{},
-    placed:[],deck:shuffledIndices(),turnIdx:0,over:false,drawn:false,winner:null,sel:null,timeLeft:0};
+    placed:[],src:DECK(),deck:shufIdx(DECK()),turnIdx:0,over:false,drawn:false,winner:null,sel:null,timeLeft:0};
   names.forEach(function(n){
     frise.alive[n]=true;frise.hands[n]=[];frise.limits[n]=4;frise.roundPts[n]=0;
     frise.powers[n]={shield:0,loupe:0,chance:0};frise.sablier[n]=false;frise.mistakeFree[n]=true;
   });
-  frise.placed.push({e:EVENTS[frise.deck.pop()],by:null});
+  frise.placed.push({e:frise.src[frise.deck.pop()],by:null});
   names.forEach(drawUp);
   checkAch(); save();
   show("frise"); renderFrise();
@@ -1467,7 +1878,7 @@ function drawUp(n){
       const inPlay=new Set();
       frise.placed.forEach(function(pc){inPlay.add(pc.e.i);});
       Object.keys(frise.hands).forEach(function(k){frise.hands[k].forEach(function(i){inPlay.add(i);});});
-      frise.deck=shuffledIndices().filter(function(i){return !inPlay.has(i);});
+      frise.deck=shufIdx(frise.src).filter(function(i){return !inPlay.has(i);});
       if(!frise.deck.length){frise.over=true;frise.drawn=true;return;}
     }
     frise.hands[n].push(frise.deck.pop());
@@ -1491,7 +1902,7 @@ function renderFrise(){
   tl+="<div class='tl-gap' data-gap='"+sorted.length+"'>➕</div>";
   const ps=frise.powers[cur];
   const hand=frise.hands[cur].map(function(idx,i){
-    const e=EVENTS[idx];
+    const e=frise.src[idx];
     return "<div class='hcard"+(frise.sel===i?" sel":"")+"' data-h='"+i+"'><b>"+esc(e.t)+"</b><div>"+esc(e.x)+"</div></div>";
   }).join("");
   const aliveList=frise.players.map(function(n){return (frise.alive[n]?"🟢":"💀")+" "+esc(n);}).join(" · ");
@@ -1522,7 +1933,7 @@ function renderFrise(){
 function placeCard(gap){
   const cur=frise.players[frise.turnIdx];
   if(frise.sel===null){toast("Choisis d'abord une carte !");return;}
-  const e=EVENTS[frise.hands[cur][frise.sel]];
+  const e=frise.src[frise.hands[cur][frise.sel]];
   const sorted=frise.placed.slice().sort(function(a,b){return a.e.y-b.e.y;});
   const left=gap>0?sorted[gap-1].e.y:null, right=gap<sorted.length?sorted[gap].e.y:null;
   const ok=(left===null||e.y>left)&&(right===null||e.y<right);
@@ -1598,7 +2009,7 @@ function useLoupe(cur){
   const ps=frise.powers[cur];
   if(ps.loupe<=0){toast("Pas de loupe !");return;}
   if(frise.sel===null){toast("Sélectionne une carte !");return;}
-  const e=EVENTS[frise.hands[cur][frise.sel]];
+  const e=frise.src[frise.hands[cur][frise.sel]];
   ps.loupe--;
   const dec=e.y<0?(Math.floor(Math.abs(e.y)/10)*10)+" av. J.-C.":(Math.floor(e.y/10)*10)+"";
   toast("🔍 Cette carte se situe dans les années "+dec);
