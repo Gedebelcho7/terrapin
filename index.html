@@ -125,7 +125,7 @@
         <button class="btn" data-go="training">S'entraîner</button></div>
       <div class="card"><h2>🛠️ Défis de joueurs</h2><p class="mut">Joue les défis des autres, crée les tiens, gagne des points d'auteur. Partage par code.</p>
         <button class="btn" data-go="challenges">Ouvrir</button></div>
-      <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale, défi quotidien « En quelle année ? » et éphémérides.</p>
+      <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale (solo ou à plusieurs), défi quotidien « En quelle année ? » dont l'événement du jour, en direct de Wikipédia.</p>
         <button class="btn" data-go="hist">Entrer dans le temps</button></div>
       <div class="card"><h2>🏆 Classements</h2><p class="mut">Jour, saison, général, créateurs. Les saisons durent 28 jours.</p>
         <button class="btn" data-go="board">Voir</button></div>
@@ -592,7 +592,7 @@ const FLAGS=[["France","fr",1],["Espagne","es",1],["Italie","it",1],["Allemagne"
 ["Soudan","sd",4],["Libye","ly",4],["Irak","iq",4],["Syrie","sy",4],["Israël","il",3],["Bhoutan","bt",4]];
 FLAGS.forEach(function(f){
   const c=COUNTRIES.filter(function(x){return x[0]===f[0];})[0];
-  if(c)addQ({id:"flag-"+f[1],cat:"drapeaux",diff:f[2],prompt:"🏳️ Quel pays a ce drapeau ? Clique sur son territoire.",flag:f[1],lat:c[1],lon:c[2],en:GEO_EN[f[0]]||f[0]});
+  if(c)addQ({id:"flag-"+f[1],cat:"drapeaux",diff:f[2],prompt:"🏳️ Quel pays a ce drapeau ? Clique sur son territoire.",flag:f[1],lat:c[1],lon:c[2],en:GEO_EN[f[0]]||f[0],name:f[0]});
 });
 /* ---- Images : photo depuis Wikipédia (sans légende, non cliquable) ---- */
 const IMGQ=[
@@ -658,7 +658,7 @@ function borderDistKm(q,pt){
   return best;
 }
 
-const DIFF={1:{base:"osm",zoom:[2,10],tol:450,timer:45},2:{base:"positron",zoom:[2,7],tol:250,timer:30},
+const DIFF={1:{base:"osm",zoom:[2,10],tol:450,timer:45},2:{base:"relief",zoom:[2,7],tol:250,timer:30},
             3:{base:"sat",zoom:[2,5],tol:150,timer:22},4:{base:"sat",zoom:[2,4],tol:90,timer:15}};
 
 /* ================= HISTOIRE : DONNÉES ================= */
@@ -937,7 +937,7 @@ function qzAffinity(){
 }
 function renderQuiz(){
   const box=$("#quizBox");
-  const tabs=[["daily","📅 Défi du jour"],["quiz","🧠 Quiz"],["dilemme","🤔 Dilemmes"],["creer","✨ Créer"],["missions","🎯 Missions"]];
+  const tabs=[["daily","📅 Défi du jour"],["quiz","🧠 Quiz"],["dilemme","🤔 Dilemmes"],["creer","✨ Créer"],["missions","🎯 Missions"],["stats","📊 Stats"]];
   box.innerHTML="<div class='row' style='flex-wrap:wrap'>"+tabs.map(function(t){
     return "<button class='btn small"+(qzTab===t[0]?" gold":"")+"' data-qtab='"+t[0]+"'>"+t[1]+"</button>";
   }).join("")+"</div><div id='qzBody' style='margin-top:14px'></div>";
@@ -948,6 +948,7 @@ function renderQuiz(){
   else if(qzTab==="quiz")qzRenderQuiz(body);
   else if(qzTab==="dilemme")qzRenderDil(body);
   else if(qzTab==="creer")qzRenderCreate(body);
+  else if(qzTab==="stats")qzRenderStats(body);
   else qzRenderMissions(body);
 }
 function qzRenderDaily(body){
@@ -1033,6 +1034,9 @@ function qzRenderDil(body){
       if(oq&&oq.dil[item.id]===c)twin=n;
     });
     let html="🗳️ Vote noté"+(first2?" (+10 XP)":"")+". ";
+    let cA=0,cB=0;
+    Object.keys(db.profiles).forEach(function(n){const oq=db.profiles[n].qz;if(oq&&oq.dil[item.id]!==undefined){if(oq.dil[item.id]===0)cA++;else cB++;}});
+    html+="📊 Groupe : "+cA+" pour « "+esc(item.a)+" », "+cB+" pour « "+esc(item.b)+" ». ";
     if(twin)html+="🎭 "+esc(twin)+" a choisi pareil que toi !";
     else if(others.length)html+="Personne n'a (encore) choisi pareil.";
     else html+="Crée un autre profil pour comparer vos réponses !";
@@ -1103,6 +1107,42 @@ function qzRenderMissions(body){
   if(aff.length)html+="<h2 style='margin-top:16px'>🎭 Affinités dilemmes</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % de réponses pareilles";}).join("<br>")+"</div>";
   body.innerHTML=html;
 }
+function qzRenderStats(body){
+  const all=qzDilAll(), votes={};
+  Object.keys(db.profiles).forEach(function(n){
+    const oq=db.profiles[n].qz; if(!oq)return;
+    Object.keys(oq.dil).forEach(function(id){
+      const item=all.filter(function(x){return x.id===id;})[0]; if(!item)return;
+      const v=votes[id]=votes[id]||{a:item.a,b:item.b,cA:0,cB:0};
+      if(oq.dil[id]===0)v.cA++;else v.cB++;
+    });
+  });
+  const rows=Object.keys(votes).map(function(id){
+    const v=votes[id], t=v.cA+v.cB;
+    return {v:v,t:t,pmaj:Math.round(Math.max(v.cA,v.cB)/t*100)};
+  }).sort(function(x,y){return y.pmaj-x.pmaj;});
+  let html="<h2>📊 Stats dilemmes</h2>";
+  if(!rows.length)html+="<p class='mut'>Votez sur des dilemmes (onglet 🤔) et les stats du groupe apparaîtront ici !</p>";
+  if(rows.length){
+    html+="<div class='card' style='margin-top:10px'><b>🧠 Pensée majoritaire du groupe</b><div class='mut' style='margin-top:6px'>"
+     +rows.slice(0,5).map(function(r){return "• "+(r.v.cA>=r.v.cB?esc(r.v.a):esc(r.v.b))+" ("+r.pmaj+" % du groupe)";}).join("<br>")+"</div></div>";
+    const clash=rows.slice().reverse().filter(function(r){return r.t>=2;}).slice(0,5);
+    if(clash.length)html+="<div class='card' style='margin-top:10px'><b>⚔️ Ce qui vous divise</b><div class='mut' style='margin-top:6px'>"
+     +clash.map(function(r){return "• "+esc(r.v.a)+" vs "+esc(r.v.b)+" ("+Math.round(r.v.cA/r.t*100)+" % / "+Math.round(r.v.cB/r.t*100)+" %)";}).join("<br>")+"</div></div>";
+    html+="<h2 style='margin-top:16px'>🗳️ Détail des votes</h2>";
+    rows.forEach(function(r){
+      const pa=Math.round(r.v.cA/r.t*100), pb=100-pa;
+      html+="<div class='card' style='margin-top:8px'><b>"+esc(r.v.a)+"</b> ou <b>"+esc(r.v.b)+"</b> ?"
+       +"<div class='timer' style='margin-top:6px'><div style='width:"+pa+"%;background:linear-gradient(90deg,#34d399,#22d3ee)'></div></div>"
+       +"<div class='mut' style='margin-top:4px'>"+esc(r.v.a)+" : "+pa+" % · "+esc(r.v.b)+" : "+pb+" % ("+r.t+" vote"+(r.t>1?"s":"")+")</div></div>";
+    });
+  }
+  const aff=qzAffinity();
+  if(aff.length)html+="<h2 style='margin-top:16px'>🎭 Affinités (qui pense comme toi)</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % de réponses pareilles";}).join("<br>")+"</div>";
+  const q=ensureQz(P()), prec=q.n?Math.round(q.ok/q.n*100):0;
+  html+="<h2 style='margin-top:16px'>🧠 Tes stats quiz</h2><div class='mut'>Répondu : "+q.n+" · Bonnes réponses : "+q.ok+" ("+prec+" %) · Questions créées : "+q.created+"</div>";
+  body.innerHTML=html;
+}
 
 /* ================= NAVIGATION ================= */
 function show(id){
@@ -1128,7 +1168,7 @@ $("#homeBtn").onclick=function(){stopTimers();show("home");};
 let map=null,cmap=null;
 const BASES={
   osm:function(){return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"});},
-  positron:function(){return L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",{maxZoom:19,subdomains:"abcd",attribution:"© CARTO © OpenStreetMap"});},
+  relief:function(){return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}",{maxZoom:13,attribution:"© Esri"});},
   sat:function(){return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"© Esri World Imagery"});},
   topo:function(){return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,subdomains:"abc",attribution:"© OpenTopoMap (CC-BY-SA)"});}
 };
@@ -1277,7 +1317,8 @@ function submitAnswer(timeout){
   const zpen=(game.zoomBase&&game.maxZoom>game.zoomBase)?Math.round((1-Math.max(0.6,1-0.05*(game.maxZoom-game.zoomBase)))*100):0;
   $("#fbDist").textContent=answered?(inBorder?"🎯 Dans les frontières !":"Distance : "+fmt(Math.round(dist))+" km"
     +(game.hintUsed?" · indice utilisé (-30 %)":"")+(zpen?" · zoom utilisé (-"+zpen+" %)":"")):"Temps écoulé sans réponse.";
-  $("#fbFact").textContent=q.fact?("🌍 Le savais-tu ? "+q.fact):"";
+  const reveal=q.flag?("🏳️ C'était : "+q.name):(q.wiki?("📸 C'était : "+q.wiki):"");
+  $("#fbFact").textContent=(reveal?reveal+" · ":"")+(q.fact?("🌍 Le savais-tu ? "+q.fact):"");
   $("#nextBtn").textContent=(game.i+1<game.questions.length)?"Suivante ➜":"Terminer 🏁";
   $("#feedback").classList.remove("hidden");
   beep(prec>=.6?740:220,.22);
@@ -1614,7 +1655,10 @@ async function fetchWikiDay(m,d){
   const db=wikiCache();
   if(db.days[key])return db.days[key];
   try{
-    const r=await fetch(WIKI_BASE+"all/"+key);
+    const ctrl=(typeof AbortController!=="undefined")?new AbortController():null;
+    const to=ctrl?setTimeout(function(){ctrl.abort();},8000):null;
+    const r=await fetch(WIKI_BASE+"all/"+key,ctrl?{signal:ctrl.signal}:undefined);
+    if(to)clearTimeout(to);
     if(!r.ok)return null;
     const j=await r.json();
     const items=[].concat(j.selected||[],j.events||[]);
@@ -1636,11 +1680,13 @@ function ensureWikiDeck(statusCb){
   return new Promise(function(res){
     if(WDECK&&WDECK.length>=60){res(WDECK);return;}
     if(flattenWiki().length>=220){WDECK=flattenWiki();res(WDECK);return;}
-    let done=0; const target=40;
+    let done=0; const target=40; let settled=false;
+    function finish(){if(settled)return;settled=true;WDECK=flattenWiki();if(WDECK.length<60)WDECK=null;res(WDECK||EVENTS);}
+    setTimeout(finish,9000);
     for(let k=0;k<target;k++){
       const m=1+Math.floor(Math.random()*12), d=1+Math.floor(Math.random()*28);
       fetchWikiDay(m,d).then(function(){done++;if(statusCb)statusCb(done,target);
-        if(done>=target){WDECK=flattenWiki();if(WDECK.length<60)WDECK=null;res(WDECK||EVENTS);}});
+        if(done>=target)finish();});
     }
   });
 }
@@ -1649,7 +1695,10 @@ async function wikiThumb(title){
   const db=wikiCache(); db.imgs=db.imgs||{};
   if(db.imgs[title])return db.imgs[title];
   try{
-    const r=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title));
+    const ctrl=(typeof AbortController!=="undefined")?new AbortController():null;
+    const to=ctrl?setTimeout(function(){ctrl.abort();},8000):null;
+    const r=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title),ctrl?{signal:ctrl.signal}:undefined);
+    if(to)clearTimeout(to);
     if(!r.ok)return null;
     const j=await r.json();
     const src=(j.originalimage&&j.originalimage.source)||(j.thumbnail&&j.thumbnail.source);
@@ -1685,17 +1734,17 @@ function renderHist(){
   const p=P();
   const d=new Date(), m=d.getMonth()+1, day=d.getDate();
   loadEphem();
-  $("#friseStart").onclick=function(){if(!requireProfile())return;renderFriseSetup();};
+  $("#friseStart").onclick=function(){try{if(!requireProfile())return;renderFriseSetup();}catch(e){toast("Oups, réessaie !");}};
   if(!p){
     $("#histStats").innerHTML="Choisis un profil d'abord (en haut à droite).";
-    $("#histDailyStatus").textContent="5 questions « En quelle année ? »";
+    $("#histDailyStatus").textContent="5 questions « En quelle année ? » dont l'événement du jour (Wikipédia)";
     $("#histAchMini").innerHTML="";
     $("#histDailyBtn").onclick=function(){if(!requireProfile())return;startHistDaily();};
     return;
   }
   const h=ensureHist(p), dk=todayKey(), done=h.daily[dk]&&h.daily[dk].done;
   $("#histStats").innerHTML="Points histoire : <b>"+fmt(h.pts)+"</b><br>Frises gagnées : <b>"+h.wins+"</b><br>Placements réussis : <b>"+h.placements+"</b><br>Meilleur défi : <b>"+fmt(h.best)+" pts</b>";
-  $("#histDailyStatus").textContent=done?(fmt(h.daily[dk].score)+" pts · "+h.daily[dk].marks):"5 questions « En quelle année ? »";
+  $("#histDailyStatus").textContent=done?(fmt(h.daily[dk].score)+" pts · "+h.daily[dk].marks):"5 questions « En quelle année ? » dont l'événement du jour (Wikipédia)";
   $("#histAchMini").innerHTML=ACH_H.map(function(a){return (h[a.id]||p.ach[a.id]?"✅ ":"⬜ ")+a.ico+" "+a.n;}).join("<br>");
   $("#histDailyBtn").textContent=done?"Voir le classement histoire ➜":"📅 Défi du jour : Que s'est-il passé ?";
   $("#histDailyBtn").onclick=function(){if(done){currentTab="hist";show("board");renderBoard("hist");}else{startHistDaily();}};
@@ -1768,7 +1817,7 @@ function renderHdQ(){
   stopHdTimer();
   const q=hd.qs[hd.i];
   hd.timeLeft=30; hd.locked=false;
-  $("#hdBox").innerHTML="<div class='row'><span class='tag'>📜 Question "+(hd.i+1)+"/5</span><span class='spacer'></span><span class='tag'>Session : "+fmt(hd.pts)+" pts</span></div>"
+  $("#hdBox").innerHTML="<div class='row'><span class='tag'>📜 Question "+(hd.i+1)+"/5</span>"+(q.t.indexOf("C'est arrivé un")===0?"<span class='tag'>📅 Éphéméride du jour</span>":"")+"<span class='spacer'></span><span class='tag'>Session : "+fmt(hd.pts)+" pts</span></div>"
    +"<h1>En quelle année… ?</h1><div style='font-size:1.15rem;font-weight:700;margin-bottom:10px'>"+esc(q.t)+"</div>"
    +"<div class='timer'><div id='hdBar' style='width:100%'></div></div>"
    +"<div class='grid'>"+q.opts.map(function(o){return "<button class='btn' data-opt='"+o+"'>"+fmtYear(o)+"</button>";}).join("")+"</div>"
@@ -1842,13 +1891,13 @@ function shufIdx(arr){
 }
 function renderFriseSetup(){
   const names=Object.keys(db.profiles);
-  $("#friseBox").innerHTML="<h2>⚔️ Nouvelle frise</h2><p class='mut'>Coche les participants (2 minimum). Chacun joue sur cet appareil, à tour de rôle.</p>"
+  $("#friseBox").innerHTML="<h2>⚔️ Nouvelle frise</h2><p class='mut'>Coche les participants (1 minimum — en solo, survis le plus longtemps !). Chacun joue sur cet appareil, à tour de rôle.</p>"
    +names.map(function(n){return "<label style='display:flex;gap:8px;align-items:center;margin:6px 0'><input type='checkbox' class='fp' value='"+esc(n)+"' checked style='width:auto'/> "+esc(n)+"</label>";}).join("")
    +"<div class='row' style='margin-top:10px'><button class='btn gold' id='friseGo'>Lancer ➜</button><button class='btn' data-go='hist'>Annuler</button></div>";
   $("#friseGo").onclick=function(){
     try{
       const sel=Array.prototype.slice.call(document.querySelectorAll(".fp:checked")).map(function(c){return c.value;});
-      if(sel.length<2){toast("Il faut au moins 2 joueurs !");return;}
+      if(sel.length<1){toast("Coche au moins un joueur !");return;}
       prepareFrise(sel);
     }catch(err){toast("Oups, la frise n'a pas pu démarrer… Réessaie !");}
   };
