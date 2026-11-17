@@ -906,11 +906,28 @@ const QZ_DIL=[
 ["Ne plus jamais utiliser d'emoji","Ne plus jamais utiliser de majuscules"],
 ["Être célèbre pour un truc que tu n'as pas fait","Jamais reconnu pour ce que tu as fait"]
 ];
+const QZ_ORDRE=[
+["Classe ces planètes de la plus proche à la plus lointaine du Soleil",["Mercure","Vénus","Terre","Mars"],"Sciences"],
+["Classe ces animaux du plus petit au plus grand",["Souris","Chat","Cheval","Éléphant"],"Animaux"],
+["Classe ces événements du plus ancien au plus récent",["Invention de l'écriture","Chute de l'Empire romain","Révolution française","Premier pas sur la Lune"],"Histoire"],
+["Classe du plus rapide au plus lent",["Guépard","Lion","Humain (sprint)","Tortue"],"Animaux"]
+];
+const QZ_CLASSEMENT=[
+["Classe ces plats de ton préféré au moins aimé",["Pizza","Burger","Sushi","Tacos"]],
+["Classe ces saisons de ta préférée à la moins aimée",["Printemps","Été","Automne","Hiver"]],
+["Classe ces jeux du meilleur au pire selon toi",["Minecraft","Fortnite","Mario Kart","FIFA"]],
+["Classe ces trucs du plus relou au moins relou",["Les embouteillages","Les réunions","Les appels inconnus","Les files d'attente"]]
+];
 let qzTab="daily",qzPlay=null;
 function ensureQz(p){if(!p.qz)p.qz={pts:0,ok:0,n:0,answered:{},dil:{},daily:{},created:0};return p.qz;}
 function qzUser(){if(!db.qzUser)db.qzUser=[];return db.qzUser;}
-function qzAll(){return QZ_QUIZ.map(function(r,i){return {id:"pack-"+i,type:"quiz",q:r[0],good:r[1],bads:r[2],theme:r[3],by:null};}).concat(qzUser());}
-function qzDilAll(){return QZ_DIL.map(function(r,i){return {id:"dil-"+i,type:"dil",a:r[0],b:r[1],by:null};}).concat(qzUser().filter(function(x){return x.type==="dil";}));}
+function qzAll(){return QZ_QUIZ.map(function(r,i){return {id:"pack-"+i,type:"quiz",q:r[0],good:r[1],bads:r[2],theme:r[3],by:null};})
+ .concat(QZ_ORDRE.map(function(r,i){return {id:"ord-"+i,type:"ordre",q:r[0],items:r[1],theme:r[2],by:null};}))
+ .concat(qzUser());}
+function qzDilAll(){return QZ_DIL.map(function(r,i){return {id:"dil-"+i,type:"dil",opts:[r[0],r[1]],by:null};})
+ .concat(qzUser().filter(function(x){return x.type==="dil";}).map(function(x){return {id:x.id,type:"dil",opts:x.opts||[x.a,x.b],q:x.q,by:x.by};}));}
+function qzClsAll(){return QZ_CLASSEMENT.map(function(r,i){return {id:"cls-"+i,type:"classement",q:r[0],items:r[1],by:null};})
+ .concat(qzUser().filter(function(x){return x.type==="classement";}).map(function(x){return {id:x.id,type:"classement",q:x.q,items:x.items,by:x.by};}));}
 function qzDaySt(p){const q=ensureQz(p),dk=todayKey();
   if(!q.daily[dk])q.daily[dk]={n:0,okQuiz:0,created:0,m1:false,m2:false,m3:false};
   return q.daily[dk];}
@@ -931,9 +948,20 @@ function qzAffinity(){
   const me=P(); if(!me||!me.qz)return [];
   return Object.keys(db.profiles).filter(function(n){return n!==db.current;}).map(function(n){
     const oq=db.profiles[n].qz; let common=0,same=0;
-    if(oq)Object.keys(me.qz.dil).forEach(function(k){if(oq.dil[k]!==undefined){common++;if(oq.dil[k]===me.qz.dil[k])same++;}});
+    if(oq){
+      Object.keys(me.qz.dil).forEach(function(k){if(oq.dil[k]!==undefined){common++;if(oq.dil[k]===me.qz.dil[k])same++;}});
+      if(me.qz.rank&&oq.rank)Object.keys(me.qz.rank).forEach(function(k){
+        if(oq.rank[k]!==undefined){
+          const a=me.qz.rank[k], b=oq.rank[k];
+          for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
+            common++;
+            if(b.indexOf(a[i])<b.indexOf(a[j]))same++;
+          }
+        }
+      });
+    }
     return {n:n,p:common?Math.round(same/common*100):null};
-  }).filter(function(x){return x.p!==null;}).sort(function(a,b){return b.p-a.p;});
+  }).filter(function(x){return x.p!==null;}).sort(function(x,y){return y.p-x.p;});
 }
 function renderQuiz(){
   const box=$("#quizBox");
@@ -990,7 +1018,9 @@ function qzRenderQuiz(body){
   if(!qzPlay||qzPlay.done||qzPlay.i>=qzPlay.list.length){
     qzPlay={list:all.slice().sort(function(){return Math.random()-0.5;}),i:0,pts:0,done:false};
   }
-  const item=qzPlay.list[qzPlay.i], q=ensureQz(P());
+  const item=qzPlay.list[qzPlay.i];
+  if(item.type==="ordre"){qzPlayOrder(item,body);return;}
+  const q=ensureQz(P());
   const opts=item.bads.concat([item.good]).sort(function(){return Math.random()-0.5;});
   body.innerHTML="<h2>🧠 Quiz"+(item.theme?" · "+esc(item.theme):"")+"</h2>"
    +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
@@ -1014,52 +1044,141 @@ function qzRenderQuiz(body){
     $("#qzNext").onclick=function(){qzPlay.i++;renderQuiz();};
   };});
 }
+function qzPlayOrder(item,body){
+  let order=item.items.map(function(_,i){return i;}).sort(function(){return Math.random()-0.5;});
+  function draw(fbHtml){
+    body.innerHTML="<h2>🔢 Classement"+(item.theme?" · "+esc(item.theme):"")+"</h2>"
+     +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
+     +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
+     +"<div style='margin-top:8px'>"+order.map(function(oi,i){
+       return "<div class='row' style='margin:4px 0'>"+(fbHtml?"<b>"+(i+1)+".</b> ":"<button class='btn small' data-up='"+i+"'"+(i===0?" disabled":"")+">▲</button><button class='btn small' data-down='"+i+"'"+(i===order.length-1?" disabled":"")+">▼</button>")+"<span style='flex:1'>"+esc(item.items[oi])+"</span></div>";
+     }).join("")+"</div>"
+     +"<div style='margin-top:8px'>"+(fbHtml||"<button class='btn primary' id='ordGo'>Valider l'ordre</button>")+"</div></div>"
+     +"<div class='mut' style='margin-top:8px'>Question "+(qzPlay.i+1)+"/"+qzPlay.list.length+" · session "+qzPlay.pts+" XP</div>";
+    if(!fbHtml){
+      body.querySelectorAll("[data-up]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.up,10);const t=order[i];order[i]=order[i-1];order[i-1]=t;draw();};});
+      body.querySelectorAll("[data-down]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.down,10);const t=order[i];order[i]=order[i+1];order[i+1]=t;draw();};});
+      $("#ordGo").onclick=check;
+    }
+  }
+  function check(){
+    const exact=order.every(function(oi,i){return oi===i;});
+    const q2=ensureQz(P()), first=!q2.answered[item.id], dst=qzDaySt(P());
+    q2.answered[item.id]=exact?1:2; q2.n++; if(exact)q2.ok++;
+    dst.n++; if(exact)dst.okQuiz++;
+    const xp=exact?(first?20:4):(first?5:0);
+    qzPlay.pts+=xp; qzXP(P(),xp);
+    const corr="Ordre correct : "+item.items.map(function(x){return esc(x);}).join(" → ");
+    draw((exact?"✅ Ordre parfait ! (+"+xp+" XP)":"❌ Raté ("+xp+" XP). "+corr)
+      +" <button class='btn small primary' id='qzNext'>Suivante ➜</button>");
+    $("#qzNext").onclick=function(){qzPlay.i++;renderQuiz();};
+  }
+  draw();
+}
+function qzPlayClassement(item,body){
+  let order=item.items.map(function(_,i){return i;}).sort(function(){return Math.random()-0.5;});
+  function draw(fbHtml,fbAfter){
+    body.innerHTML="<h2>🥇 Classement entre nous</h2>"
+     +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
+     +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
+     +"<div style='margin-top:8px'>"+order.map(function(oi,i){
+       return "<div class='row' style='margin:4px 0'>"+(fbHtml?"<b>"+(i+1)+".</b> ":"<button class='btn small' data-cup='"+i+"'"+(i===0?" disabled":"")+">▲</button><button class='btn small' data-cdown='"+i+"'"+(i===order.length-1?" disabled":"")+">▼</button>")+"<span style='flex:1'>"+esc(item.items[oi])+"</span></div>";
+     }).join("")+"</div>"
+     +"<div id='clsFb' style='margin-top:8px'>"+(fbHtml||"")+"</div>"
+     +(fbHtml?"":"<button class='btn primary' id='clsGo' style='margin-top:8px'>Valider mon classement</button>")+"</div>";
+    if(!fbHtml){
+      body.querySelectorAll("[data-cup]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.cup,10);const t=order[i];order[i]=order[i-1];order[i-1]=t;draw();};});
+      body.querySelectorAll("[data-cdown]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.cdown,10);const t=order[i];order[i]=order[i+1];order[i+1]=t;draw();};});
+      $("#clsGo").onclick=submit;
+    }
+    if(fbAfter)fbAfter();
+  }
+  function submit(){
+    const q2=ensureQz(P()); q2.rank=q2.rank||{};
+    const first=q2.rank[item.id]===undefined;
+    q2.rank[item.id]=order.slice(); q2.n++;
+    qzDaySt(P()).n++;
+    if(first)qzXP(P(),10); else save();
+    const lines=[];
+    Object.keys(db.profiles).forEach(function(n){
+      if(n===db.current)return;
+      const oq=db.profiles[n].qz;
+      if(oq&&oq.rank&&oq.rank[item.id]!==undefined){
+        const b=oq.rank[item.id]; let pairs=0,con=0;
+        for(let i=0;i<order.length;i++)for(let j=i+1;j<order.length;j++){
+          pairs++; if(b.indexOf(order[i])<b.indexOf(order[j]))con++;
+        }
+        lines.push("🤝 "+esc(n)+" : "+Math.round(con/pairs*100)+" % d'accord avec toi");
+      }
+    });
+    let fbHtml="🗳️ Classement noté"+(first?" (+10 XP)":"")+".";
+    if(lines.length)fbHtml+="<br>"+lines.join("<br>");
+    else fbHtml+="<br>Les autres profils pourront comparer leur classement au tien !";
+    fbHtml+=" <button class='btn small primary' id='clsNext'>Autre ➜</button>";
+    draw(fbHtml,function(){$("#clsNext").onclick=function(){renderQuiz();};});
+  }
+  draw();
+}
 function qzRenderDil(body){
-  const all=qzDilAll(), item=all[Math.floor(Math.random()*all.length)];
-  const q=ensureQz(P()), first=q.dil[item.id]===undefined;
+  const dils=qzDilAll(), cls=qzClsAll();
+  const pool=dils.map(function(d){return {kind:"dil",it:d};}).concat(cls.map(function(c){return {kind:"cls",it:c};}));
+  const pick=pool[Math.floor(Math.random()*pool.length)];
+  if(pick.kind==="cls"){qzPlayClassement(pick.it,body);return;}
+  const item=pick.it, q=ensureQz(P()), first=q.dil[item.id]===undefined;
   body.innerHTML="<h2>🤔 Dilemmes</h2>"
-   +"<div class='card' style='margin-top:10px'><b>Tu préfères : "+esc(item.a)+"</b> ou <b>"+esc(item.b)+"</b> ?"
+   +"<div class='card' style='margin-top:10px'><b>"+(item.q?esc(item.q):"Tu préfères…")+"</b>"
    +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
-   +"<div style='margin-top:8px'><button class='btn small' data-da='0'>"+esc(item.a)+"</button> <button class='btn small' data-da='1'>"+esc(item.b)+"</button></div>"
+   +"<div style='margin-top:8px'>"+item.opts.map(function(o,i){return "<button class='btn small' style='display:block;width:100%;margin:4px 0' data-da='"+i+"'>"+esc(o)+"</button>";}).join("")+"</div>"
    +"<div id='qzDilFb' style='margin-top:8px'></div></div>"
    +"<div class='mut' style='margin-top:8px'>"+(first?"+10 XP pour ton premier vote sur ce dilemme":"déjà voté (tu peux changer d'avis, sans XP)")+"</div>";
   body.querySelectorAll("[data-da]").forEach(function(b){b.onclick=function(){
     const c=parseInt(b.dataset.da,10), q2=ensureQz(P()), first2=q2.dil[item.id]===undefined, dst=qzDaySt(P());
     q2.dil[item.id]=c; dst.n++;
     if(first2)qzXP(P(),10); else save();
-    const others=Object.keys(db.profiles).filter(function(n){return n!==db.current;});
-    let twin=null;
-    others.forEach(function(n){
-      const oq=db.profiles[n].qz;
-      if(oq&&oq.dil[item.id]===c)twin=n;
+    const counts=item.opts.map(function(_,i){
+      let n=0;
+      Object.keys(db.profiles).forEach(function(pn){const oq=db.profiles[pn].qz;if(oq&&oq.dil[item.id]===i)n++;});
+      return n;
     });
-    let html="🗳️ Vote noté"+(first2?" (+10 XP)":"")+". ";
-    let cA=0,cB=0;
-    Object.keys(db.profiles).forEach(function(n){const oq=db.profiles[n].qz;if(oq&&oq.dil[item.id]!==undefined){if(oq.dil[item.id]===0)cA++;else cB++;}});
-    html+="📊 Groupe : "+cA+" pour « "+esc(item.a)+" », "+cB+" pour « "+esc(item.b)+" ». ";
+    let html="🗳️ Vote noté"+(first2?" (+10 XP)":"")+". 📊 Groupe : "
+      +counts.map(function(n,i){return n+" pour « "+esc(item.opts[i])+" »";}).join(", ")+". ";
+    let twin=null;
+    Object.keys(db.profiles).forEach(function(n){
+      if(n!==db.current){const oq=db.profiles[n].qz;if(oq&&oq.dil[item.id]===c)twin=n;}
+    });
     if(twin)html+="🎭 "+esc(twin)+" a choisi pareil que toi !";
-    else if(others.length)html+="Personne n'a (encore) choisi pareil.";
-    else html+="Crée un autre profil pour comparer vos réponses !";
-    $("#qzDilFb").innerHTML=html+" <button class='btn small primary' id='qzDilNext'>Autre dilemme ➜</button>";
+    $("#qzDilFb").innerHTML=html+" <button class='btn small primary' id='qzDilNext'>Autre ➜</button>";
     $("#qzDilNext").onclick=function(){renderQuiz();};
   };});
 }
 function qzRenderCreate(body){
   body.innerHTML="<h2>✨ Créer une question</h2>"
    +"<div class='card' style='margin-top:10px'>"
-   +"<label>Type</label><select id='qzType'><option value='quiz'>🧠 Quiz (bonne réponse)</option><option value='dil'>🤔 Dilemme (tu préfères)</option></select>"
+   +"<label>Type</label><select id='qzType'>"
+   +"<option value='quiz'>🧠 Quiz (bonne réponse)</option>"
+   +"<option value='dil'>🤔 Dilemme (autant de choix que tu veux)</option>"
+   +"<option value='ordre'>🔢 Classement à remettre dans l'ordre</option>"
+   +"<option value='classement'>🥇 Sondage de classement (qui préfère quoi)</option>"
+   +"</select>"
    +"<div id='qzForm'></div>"
    +"<button class='btn primary' id='qzSave' style='margin-top:10px'>💾 Publier (+25 XP)</button></div>"
    +"<div class='mut' style='margin-top:8px'>Tes créations sont jouables par tous les profils de cet appareil.</div>";
   function form(){
-    if($("#qzType").value==="quiz"){
+    const t=$("#qzType").value;
+    if(t==="quiz"){
       $("#qzForm").innerHTML="<label>Question</label><input id='qzQ' placeholder='Ex : Quelle est la capitale du Japon ?'/>"
        +"<label>Bonne réponse</label><input id='qzG' placeholder='Tokyo'/>"
-       +"<label>Mauvaises réponses (séparées par un point-virgule)</label><input id='qzB' placeholder='Osaka;Kyoto;Nagoya'/>"
+       +"<label>Mauvaises réponses (séparées par un point-virgule, autant que tu veux)</label><input id='qzB' placeholder='Osaka;Kyoto;Nagoya'/>"
        +"<label>Thème (facultatif)</label><input id='qzT' placeholder='Géographie'/>";
+    } else if(t==="dil"){
+      $("#qzForm").innerHTML="<label>Question (facultatif, par défaut « Tu préfères… »)</label><input id='qzQ' placeholder='Ex : Tu préfères quoi ?'/>"
+       +"<label>Les choix (séparés par un point-virgule, autant que tu veux)</label><input id='qzC' placeholder='Bras en mousse;Jambes en mousse;Tête en mousse'/>";
+    } else if(t==="ordre"){
+      $("#qzForm").innerHTML="<label>Consigne</label><input id='qzQ' placeholder='Ex : Classe du plus petit au plus grand'/>"
+       +"<label>Les éléments DANS LE BON ORDRE (séparés par un point-virgule, 2 à 6)</label><input id='qzC' placeholder='Souris;Chat;Cheval;Éléphant'/>";
     } else {
-      $("#qzForm").innerHTML="<label>Choix A</label><input id='qzA' placeholder='Bras en mousse'/>"
-       +"<label>Choix B</label><input id='qzB' placeholder='Jambes en mousse'/>";
+      $("#qzForm").innerHTML="<label>Consigne</label><input id='qzQ' placeholder='Ex : Classe tes plats préférés'/>"
+       +"<label>Les éléments (séparés par un point-virgule, 2 à 6)</label><input id='qzC' placeholder='Pizza;Burger;Sushi;Tacos'/>";
     }
   }
   form(); $("#qzType").onchange=form;
@@ -1072,9 +1191,12 @@ function qzRenderCreate(body){
       if(!qq||!g||bads.length<1){toast("Il faut une question, une bonne réponse et au moins 1 mauvaise !");return;}
       qzUser().push({id:"user-"+Date.now(),type:"quiz",q:qq,good:g,bads:bads,theme:th,by:db.current});
     } else {
-      const a=$("#qzA").value.trim(), b=$("#qzB").value.trim();
-      if(!a||!b){toast("Il faut deux choix !");return;}
-      qzUser().push({id:"userd-"+Date.now(),type:"dil",a:a,b:b,by:db.current});
+      const qq=($("#qzQ").value||"").trim(), items=$("#qzC").value.split(";").map(function(s){return s.trim();}).filter(Boolean);
+      if(items.length<2||items.length>6){toast("Il faut entre 2 et 6 éléments !");return;}
+      if(t!=="dil"&&!qq){toast("Il faut une consigne !");return;}
+      if(t==="dil")qzUser().push({id:"userd-"+Date.now(),type:"dil",opts:items,q:qq,by:db.current});
+      else if(t==="ordre")qzUser().push({id:"usero-"+Date.now(),type:"ordre",q:qq,items:items,by:db.current});
+      else qzUser().push({id:"userc-"+Date.now(),type:"classement",q:qq,items:items,by:db.current});
     }
     const p=P(), q=ensureQz(p), dst=qzDaySt(p);
     q.created++; q.n++; dst.created++;
@@ -1113,32 +1235,31 @@ function qzRenderStats(body){
     const oq=db.profiles[n].qz; if(!oq)return;
     Object.keys(oq.dil).forEach(function(id){
       const item=all.filter(function(x){return x.id===id;})[0]; if(!item)return;
-      const v=votes[id]=votes[id]||{a:item.a,b:item.b,cA:0,cB:0};
-      if(oq.dil[id]===0)v.cA++;else v.cB++;
+      const v=votes[id]=votes[id]||{opts:item.opts,c:item.opts.map(function(){return 0;})};
+      if(oq.dil[id]>=0&&oq.dil[id]<v.opts.length)v.c[oq.dil[id]]++;
     });
   });
   const rows=Object.keys(votes).map(function(id){
-    const v=votes[id], t=v.cA+v.cB;
-    return {v:v,t:t,pmaj:Math.round(Math.max(v.cA,v.cB)/t*100)};
+    const v=votes[id], t=v.c.reduce(function(a,b){return a+b;},0);
+    const imax=v.c.indexOf(Math.max.apply(null,v.c));
+    return {v:v,t:t,imax:imax,pmaj:Math.round(Math.max.apply(null,v.c)/t*100)};
   }).sort(function(x,y){return y.pmaj-x.pmaj;});
   let html="<h2>📊 Stats dilemmes</h2>";
   if(!rows.length)html+="<p class='mut'>Votez sur des dilemmes (onglet 🤔) et les stats du groupe apparaîtront ici !</p>";
   if(rows.length){
     html+="<div class='card' style='margin-top:10px'><b>🧠 Pensée majoritaire du groupe</b><div class='mut' style='margin-top:6px'>"
-     +rows.slice(0,5).map(function(r){return "• "+(r.v.cA>=r.v.cB?esc(r.v.a):esc(r.v.b))+" ("+r.pmaj+" % du groupe)";}).join("<br>")+"</div></div>";
-    const clash=rows.slice().reverse().filter(function(r){return r.t>=2;}).slice(0,5);
+     +rows.slice(0,5).map(function(r){return "• "+esc(r.v.opts[r.imax])+" ("+r.pmaj+" % du groupe)";}).join("<br>")+"</div></div>";
+    const clash=rows.slice().sort(function(x,y){return x.pmaj-y.pmaj;}).filter(function(r){return r.t>=2;}).slice(0,5);
     if(clash.length)html+="<div class='card' style='margin-top:10px'><b>⚔️ Ce qui vous divise</b><div class='mut' style='margin-top:6px'>"
-     +clash.map(function(r){return "• "+esc(r.v.a)+" vs "+esc(r.v.b)+" ("+Math.round(r.v.cA/r.t*100)+" % / "+Math.round(r.v.cB/r.t*100)+" %)";}).join("<br>")+"</div></div>";
+     +clash.map(function(r){return "• "+esc(r.v.opts.join(" vs "))+" ("+r.v.c.map(function(c){return Math.round(c/r.t*100)+" %";}).join(" / ")+")";}).join("<br>")+"</div></div>";
     html+="<h2 style='margin-top:16px'>🗳️ Détail des votes</h2>";
     rows.forEach(function(r){
-      const pa=Math.round(r.v.cA/r.t*100), pb=100-pa;
-      html+="<div class='card' style='margin-top:8px'><b>"+esc(r.v.a)+"</b> ou <b>"+esc(r.v.b)+"</b> ?"
-       +"<div class='timer' style='margin-top:6px'><div style='width:"+pa+"%;background:linear-gradient(90deg,#34d399,#22d3ee)'></div></div>"
-       +"<div class='mut' style='margin-top:4px'>"+esc(r.v.a)+" : "+pa+" % · "+esc(r.v.b)+" : "+pb+" % ("+r.t+" vote"+(r.t>1?"s":"")+")</div></div>";
+      html+="<div class='card' style='margin-top:8px'><div class='mut'>"
+       +r.v.opts.map(function(o,i){return esc(o)+" : "+Math.round(r.v.c[i]/r.t*100)+" % ("+r.v.c[i]+")";}).join(" · ")+"</div></div>";
     });
   }
   const aff=qzAffinity();
-  if(aff.length)html+="<h2 style='margin-top:16px'>🎭 Affinités (qui pense comme toi)</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % de réponses pareilles";}).join("<br>")+"</div>";
+  if(aff.length)html+="<h2 style='margin-top:16px'>🤝 Qui est d'accord avec qui</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % d'accord avec toi";}).join("<br>")+"</div>";
   const q=ensureQz(P()), prec=q.n?Math.round(q.ok/q.n*100):0;
   html+="<h2 style='margin-top:16px'>🧠 Tes stats quiz</h2><div class='mut'>Répondu : "+q.n+" · Bonnes réponses : "+q.ok+" ("+prec+" %) · Questions créées : "+q.created+"</div>";
   body.innerHTML=html;
@@ -1901,6 +2022,7 @@ function renderFriseSetup(){
       prepareFrise(sel);
     }catch(err){toast("Oups, la frise n'a pas pu démarrer… Réessaie !");}
   };
+  show("frise");
 }
 function prepareFrise(names){
   $("#friseBox").innerHTML="<h2>⚔️ Nouvelle frise</h2><p class='mut' id='wikiLoad'>Récupération des événements depuis Wikipédia…</p>";
