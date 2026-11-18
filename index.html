@@ -837,9 +837,9 @@ const EPHEM=[
 ];
 
 /* ================= FIREBASE CLOUD STATE & SYNC ================= */
-let dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {} };
+let dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {}, resetEpoch: 0 };
 let currentUsername = localStorage.getItem("terrapin_current_user") || null;
-let firestoreDb = null, firebaseAuth = null, stateDocRef = null;
+let firestoreDb = null, firebaseAuth = null, stateDocRef = null, currentUid = null;
 
 function setSyncStatus(state, text) {
   const dot = $("#syncDot");
@@ -859,6 +859,17 @@ function setSyncStatus(state, text) {
 
 function mergeStates(remote) {
   if (!remote || typeof remote !== "object") return;
+  
+  // Détection d'une remise à zéro globale déclenchée par l'admin
+  const remoteEpoch = remote.resetEpoch || 0;
+  const localEpoch = dbState.resetEpoch || 0;
+  if (remoteEpoch > localEpoch) {
+    dbState = JSON.parse(JSON.stringify(remote));
+    localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
+    toast("🔄 L'administrateur a effectué une remise à zéro globale !");
+    return;
+  }
+
   if (remote.profiles && typeof remote.profiles === "object") {
     Object.keys(remote.profiles).forEach(k => {
       const rp = remote.profiles[k];
@@ -910,7 +921,8 @@ async function initCloudSync(){
     firebaseAuth = getAuth(app);
     firestoreDb = getFirestore(app);
 
-    await signInAnonymously(firebaseAuth);
+    const cred = await signInAnonymously(firebaseAuth);
+    currentUid = cred.user.uid;
     stateDocRef = doc(firestoreDb, "terrapin", "global_state");
 
     onSnapshot(stateDocRef, (docSnap) => {
@@ -919,6 +931,16 @@ async function initCloudSync(){
         mergeStates(remote);
         localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
         setSyncStatus("ok", "En ligne");
+        
+        // Vérifie si le profil actuel appartient bien à cet appareil
+        if (currentUsername && dbState.profiles[currentUsername]) {
+          const owner = dbState.profiles[currentUsername].ownerUid;
+          if (owner && currentUid && owner !== currentUid) {
+            currentUsername = null;
+            localStorage.removeItem("terrapin_current_user");
+          }
+        }
+        
         renderHome();
         if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
         if (document.querySelector("#screen-challenges.active")) renderChallenges();
@@ -942,13 +964,13 @@ function loadLocalFallback(){
   } catch(e){}
 }
 
-async function saveCloud(){
+async function saveCloud(overwrite = false){
   try {
     localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
     if (currentUsername) localStorage.setItem("terrapin_current_user", currentUsername);
     if (firestoreDb && stateDocRef && firebaseAuth && firebaseAuth.currentUser) {
       setSyncStatus("sync", "Sauvegarde…");
-      await setDoc(stateDocRef, dbState, { merge: true });
+      await setDoc(stateDocRef, dbState, { merge: !overwrite });
       setSyncStatus("ok", "En ligne");
     }
   } catch(e) {
@@ -957,7 +979,14 @@ async function saveCloud(){
   }
 }
 
-function P(){return currentUsername && dbState.profiles[currentUsername] ? dbState.profiles[currentUsername] : null;}
+function P(){
+  if (!currentUsername || !dbState.profiles[currentUsername]) return null;
+  const pr = dbState.profiles[currentUsername];
+  // Sécurité : bloque l'accès si le profil appartient à un autre UID
+  if (pr.ownerUid && currentUid && pr.ownerUid !== currentUid) return null;
+  return pr;
+}
+
 function isAdmin(){
   const p = P();
   if(!p) return false;
@@ -965,9 +994,11 @@ function isAdmin(){
   return allNames.length > 0 && allNames[0] === currentUsername;
 }
 
-function newProfile(name){
+function newProfile(name, pin){
   dbState.profiles[name] = {
     name: name,
+    ownerUid: currentUid || ("local-" + Date.now()),
+    pin: pin || "0000",
     created: Date.now(),
     points: 0,
     seasonPts: {},
@@ -1689,76 +1720,18 @@ function finishGame(){
 $("#shareBtn").addEventListener("click",function(){
   const s=window._lastShare; if(!s)return;
   const si=seasonInfo();
-  const txt="🌍 TerraPin · "+todayKey()+"\n"
-    +(s.mode==="daily"?"Défi du jour · ":"Session · ")
-    +fmt(s.total)+" pts\n"+s.marks+"\n"
-    +"Saison "+si.n+" · Jour "+si.day+"/28\n"
-    +"#TerraPin";
-  const done=function(){toast("Fiche copiée ! Colle-la où tu veux 📋");};
-  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(function(){fallbackCopy(txt,done);});}
-  else fallbackCopy(txt,done);
-});
-function fallbackCopy(txt,cb){
-  const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();
-  try{document.execCommand("copy");cb();}catch(e){toast("Copie impossible : "+txt);}document.body.removeChild(ta);
-}
-
-/* ================= ACCUEIL ================= */
-function renderHome(){
-  const si=seasonInfo();
-  $("#seasonChip").textContent="🏅 Saison "+si.n+" · J"+si.day+"/28";
-  const p=P();
-  $("#profileBtn").textContent=p?("👤 "+p.name+" · L"+levelOf(p)):"👤 Choisir un profil";
-  $("#homeDate").textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
-  $("#homeStreak").textContent=p?("🔥 Série : "+p.streak+" j"):"";
-  const dk=todayKey(), done=p&&p.daily[dk]&&p.daily[dk].done;
-  $("#dailyStatus").textContent=done?(fmt(p.daily[dk].score)+" pts · "+p.daily[dk].marks):"5 questions t'attendent";
-  $("#dailyBtn").textContent=done?"Voir le classement ➜":"Jouer ➜";
-  $("#dailyBtn").onclick=function(){ if(!requireProfile())return; if(done){show("board");renderBoard("day");} else startGame(buildDaily(),"daily"); };
-  
-  if(isAdmin()){
-    $("#adminCard").style.display="block";
-    $("#adminResetBtn").onclick=function(){
-      openAdminResetModal();
-    };
-  } else {
-    $("#adminCard").style.display="none";
-  }
-
-  let html="";
-  const rows=Object.values(dbState.profiles).filter(function(x){return x.daily[dk]&&x.daily[dk].done;})
-    .sort(function(a,b){return b.daily[dk].score-a.daily[dk].score;}).slice(0,3);
-  if(rows.length){html="<div class='mut' style='margin-bottom:4px'>Podium du jour :</div>"+rows.map(function(r,i){return ["🥇","🥈","🥉"][i]+" "+esc(r.name)+" · "+fmt(r.daily[dk].score)+" pts";}).join("<br>");}
-  $("#dailyMini").innerHTML=html;
-  $("#achCount").textContent=p?(Object.keys(p.ach).length+" / "+ALLACH.length+" débloqués"):"";
-}
-
-function openAdminResetModal(){
-  const si=seasonInfo();
-  dbState.seasonArchives = dbState.seasonArchives || {};
-  let seasonOpts = "<option value='all'>♾️ Remettre TOUT à zéro (Tous les profils, tous les scores, défis)</option>";
-  seasonOpts += "<option value='current'>🏅 Remettre à zéro uniquement la saison en cours (Saison " + si.n + ")</option>";
-  for(let s = 1; s < si.n; s++){
-    seasonOpts += "<option value='season_"+s+"'>📜 Archiver &amp; Remettre à zéro la Saison " + s + "</option>";
-  }
-
-  $("#modalBox").innerHTML="<h2>⚙️ Administration &amp; Saisons</h2>"
-   +"<p class='mut'>En tant qu'administrateur, tu peux réinitialiser les scores, archiver une saison ou tout remettre à zéro pour repartir sur de nouvelles bases.</p>"
-   +"<label>Action de remise à zéro</label><select id='adminResetChoice'>"+seasonOpts+"</select>"
-   +"<div class='row' style='margin-top:14px'>"
-   +"<button class='btn danger' id='doResetConfirm'>Exécuter la remise à zéro</button>"
-   +"<button class='btn' id='closeModal'>Annuler</button></div>";
-  $("#modal").classList.add("open");
-
-  $("#doResetConfirm").onclick=function(){
+  $("#doResetConfirm").onclick=async function(){
+    if(!isAdmin()){toast("Action non autorisée.");return;}
     const choice = $("#adminResetChoice").value;
+    dbState.resetEpoch = Date.now(); // Signal global pour tous les clients connectés
+
     if(choice === "all"){
       Object.values(dbState.profiles).forEach(function(pr){
         pr.points=0; pr.seasonPts={}; pr.seasonDays={}; pr.daily={}; pr.streak=0; pr.bestDaily=0; pr.trainPts=0;
         pr.stats={answered:0,perfect:0,distSum:0,byCat:{},successCount:0};
       });
       dbState.challenges={};
-      toast("🔄 Remise à zéro complète effectuée pour tout le monde !");
+      toast("🔄 Remise à zéro complète envoyée à tous les joueurs !");
     } else if(choice === "current"){
       Object.values(dbState.profiles).forEach(function(pr){
         if(pr.seasonPts) pr.seasonPts[si.n]=0;
@@ -1767,7 +1740,6 @@ function openAdminResetModal(){
       toast("🏅 Saison " + si.n + " remise à zéro pour tous !");
     } else if(choice.indexOf("season_") === 0){
       const sNum = parseInt(choice.split("_")[1], 10);
-      // Archive winner of that season
       let topP=null, topScore=-1;
       Object.values(dbState.profiles).forEach(function(pr){
         const pts = pr.seasonPts && pr.seasonPts[sNum] ? pr.seasonPts[sNum] : 0;
@@ -1780,7 +1752,7 @@ function openAdminResetModal(){
       });
       toast("📜 Saison " + sNum + " archivée et remise à zéro !");
     }
-    saveCloud();
+    await saveCloud(true); // Écrase proprement le document Firestore pour propager les 0
     $("#modal").classList.remove("open");
     renderHome();
   };
@@ -1793,29 +1765,88 @@ function requireProfile(){
   openProfileModal(); return false;
 }
 
-/* ================= PROFILS ================= */
+/* ================= PROFILS SÉCURISÉS (1 COMPTE PAR POSTE + PIN) ================= */
 $("#profileBtn").addEventListener("click",openProfileModal);
 function openProfileModal(){
-  const names=Object.keys(dbState.profiles);
-  $("#modalBox").innerHTML="<h2>👤 Profils en ligne</h2>"
-   +(names.length?"<div class='mut' style='margin:8px 0'>Qui joue ?</div>"+names.map(function(n){
-      const pr=dbState.profiles[n];
-      const isA = Object.keys(dbState.profiles).sort((a,b)=>dbState.profiles[a].created - dbState.profiles[b].created)[0] === n;
-      return "<div class='row' style='margin:6px 0'><button class='btn small "+(n===currentUsername?"primary":"")+"' data-pick='"+esc(n)+"'>"+(n===currentUsername?"▶ ":"")+esc(n)+(isA?" 👑":"")+" · "+fmt(pr.points)+" pts</button></div>";
-    }).join(""):"<p class='mut'>Aucun profil en ligne. Crée le premier (tu seras admin) !</p>")
-   +"<label>Nouveau profil</label><input id='newName' placeholder='Ton pseudo' maxlength='20'/>"
-   +"<div class='row' style='margin-top:10px'><button class='btn primary' id='createProfile'>Créer &amp; jouer</button>"
-   +"<button class='btn' id='closeModal'>Fermer</button></div>";
+  const p = P();
+  const isA = isAdmin();
+  
+  let html = "<h2>👤 Mon Compte</h2>";
+  
+  if (p) {
+    html += "<div class='card' style='background:var(--card2);margin:10px 0'>"
+      + "<div class='row'><b>" + esc(p.name) + (isA ? " 👑 (Admin)" : "") + "</b><span class='spacer'></span><span class='tag'>" + fmt(p.points) + " pts</span></div>"
+      + "<div class='mut' style='margin-top:6px'>🔒 Ce compte est verrouillé sur cet appareil.</div>"
+      + "<div class='mut' style='margin-top:4px'>Code PIN de récupération : <b style='color:var(--acc)'>" + esc(p.pin || "Non défini") + "</b></div>"
+      + "<button class='btn danger small' id='logoutBtn' style='margin-top:10px'>Se déconnecter de cet appareil</button>"
+      + "</div>";
+  } else {
+    html += "<p class='mut'>Crée ton profil personnel (il sera lié à ton appareil) ou connecte-toi avec ton pseudo et ton code PIN.</p>"
+      + "<div class='card' style='background:var(--card2);margin:10px 0'>"
+      + "<b>✨ Créer un nouveau compte</b>"
+      + "<label>Pseudo</label><input id='newName' placeholder='Ton pseudo' maxlength='20'/>"
+      + "<label>Code PIN (4 chiffres, pour te reconnecter ailleurs)</label><input id='newPin' type='password' inputmode='numeric' placeholder='Ex: 1234' maxlength='4'/>"
+      + "<button class='btn primary' id='createProfile' style='margin-top:10px;width:100%'>Créer mon compte</button>"
+      + "</div>"
+      + "<div class='card' style='background:var(--card2);margin:10px 0'>"
+      + "<b>🔑 Déjà un compte ? (Connexion / Transfert)</b>"
+      + "<label>Ton pseudo existant</label><input id='loginName' placeholder='Pseudo exact' maxlength='20'/>"
+      + "<label>Ton code PIN</label><input id='loginPin' type='password' inputmode='numeric' placeholder='Code PIN' maxlength='4'/>"
+      + "<button class='btn' id='loginProfile' style='margin-top:10px;width:100%'>Récupérer mon compte</button>"
+      + "</div>";
+  }
+  
+  html += "<div class='row' style='margin-top:10px'><span class='spacer'></span><button class='btn' id='closeModal'>Fermer</button></div>";
+  $("#modalBox").innerHTML = html;
   $("#modal").classList.add("open");
-  $("#createProfile").onclick=function(){
-    const n=$("#newName").value.trim();
-    if(!n){toast("Choisis un pseudo !");return;}
-    if(dbState.profiles[n]){currentUsername=n;saveCloud();}
-    else newProfile(n);
-    $("#modal").classList.remove("open");renderHome();toast("Bienvenue en ligne, "+n+" ! 🌍");
-  };
-  $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
-  document.querySelectorAll("[data-pick]").forEach(function(b){b.onclick=function(){currentUsername=b.dataset.pick;saveCloud();$("#modal").classList.remove("open");renderHome();};});
+
+  if ($("#logoutBtn")) {
+    $("#logoutBtn").onclick = function() {
+      currentUsername = null;
+      localStorage.removeItem("terrapin_current_user");
+      $("#modal").classList.remove("open");
+      renderHome();
+      toast("Déconnecté.");
+    };
+  }
+
+  if ($("#createProfile")) {
+    $("#createProfile").onclick = function() {
+      const n = $("#newName").value.trim();
+      const pin = $("#newPin").value.trim();
+      if (!n) { toast("Choisis un pseudo !"); return; }
+      if (!/^\d{4}$/.test(pin)) { toast("Choisis un code PIN à 4 chiffres !"); return; }
+      if (dbState.profiles[n]) {
+        toast("Ce pseudo est déjà pris ! Utilise la connexion par PIN si c'est le tien.");
+        return;
+      }
+      newProfile(n, pin);
+      $("#modal").classList.remove("open");
+      renderHome();
+      toast("Compte créé et sécurisé, " + n + " ! 🌍");
+    };
+  }
+
+  if ($("#loginProfile")) {
+    $("#loginProfile").onclick = function() {
+      const n = $("#loginName").value.trim();
+      const pin = $("#loginPin").value.trim();
+      const target = dbState.profiles[n];
+      if (!target) { toast("Compte introuvable."); return; }
+      if (target.pin && target.pin !== pin) { toast("Code PIN incorrect !"); return; }
+      
+      // Transfère la propriété du compte vers cet appareil
+      target.ownerUid = currentUid || ("local-" + Date.now());
+      if (!target.pin) target.pin = pin || "0000";
+      currentUsername = n;
+      saveCloud();
+      $("#modal").classList.remove("open");
+      renderHome();
+      toast("Bon retour, " + n + " ! 🔑");
+    };
+  }
+
+  $("#closeModal").onclick = function() { $("#modal").classList.remove("open"); };
 }
 $("#modal").addEventListener("click",function(e){if(e.target.id==="modal")$("#modal").classList.remove("open");});
 
@@ -2553,15 +2584,21 @@ async function boot(){
   loadLocalFallback();
   await initCloudSync();
   initMap();
-  renderHome(); show("home");
-  if(!currentUsername || !dbState.profiles[currentUsername]){
-    const names = Object.keys(dbState.profiles);
-    if(names.length > 0){
-      currentUsername = names[0];
-      renderHome();
-    } else {
-      openProfileModal();
+  
+  // Ne sélectionne JAMAIS automatiquement le compte d'un autre joueur
+  if (currentUsername && dbState.profiles[currentUsername]) {
+    const owner = dbState.profiles[currentUsername].ownerUid;
+    if (owner && currentUid && owner !== currentUid) {
+      currentUsername = null;
+      localStorage.removeItem("terrapin_current_user");
     }
+  } else {
+    currentUsername = null;
+  }
+
+  renderHome(); show("home");
+  if (!P()) {
+    openProfileModal();
   }
 }
 boot();
