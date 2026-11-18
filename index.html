@@ -122,13 +122,13 @@
       <div style="margin-top:10px"><button class="btn primary" id="dailyBtn">Jouer ➜</button></div>
       <div id="dailyMini" style="margin-top:12px"></div>
     </div>
-    <div class="grid">
+      <div class="grid">
       <div class="card"><h2>🏋️ Entraînement</h2><p class="mut">Questions illimitées, choisis ta catégorie et ta difficulté. Ne compte pas dans le classement saison.</p>
         <button class="btn" data-go="training">S'entraîner</button></div>
       <div class="card"><h2>🛠️ Défis de joueurs</h2><p class="mut">Joue les défis en ligne des autres, crée les tiens, gagne des points d'auteur.</p>
         <button class="btn" data-go="challenges">Ouvrir</button></div>
       <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale (solo ou multi en ligne), défi quotidien Wikipédia.</p>
-        <button class="btn" data-go="hist">Entrer dans le temps</button></div>
+        <button class="btn" id="goHistBtn">Entrer dans le temps</button></div>
       <div class="card"><h2>🏆 Classements &amp; Hall of Fame</h2><p class="mut">Jour, saison, all-time, Hall of Fame, Hall of Shame (les pls) et archives des vainqueurs.</p>
         <button class="btn" data-go="board">Voir</button></div>
       <div class="card"><h2>🎖️ Réussites &amp; Badges</h2><p class="mut" id="achCount"></p>
@@ -2500,57 +2500,18 @@ document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{
   if(g==="ach")renderAch();
   if(g==="stats")renderStats();
   if(g==="challenges")renderChallenges();
-  if(g==="hist")renderHist();
   if(g==="quiz")renderQuiz();
   show(g);
 });
-$("#homeBtn").onclick=()=>{renderHome();show("home");};
-$("#profileBtn").onclick=()=>openProfileModal();
-$("#helpBtn").onclick=openHelp;
-$("#adminResetBtn").onclick=openAdminModal;
-$("#hintBtn").onclick=useHint;
-$("#guessBtn").onclick=()=>submitGuess(false);
-$("#nextBtn").onclick=nextStep;
-$("#trStart").onclick=()=>startGame("training",trainingQuestions($("#trCat").value,+$("#trDiff").value));
-$("#createBtn").onclick=openCreator;
-$("#saveChallenge").onclick=saveNewChallenge;
-$("#importBtn").onclick=importChallenge;
-$("#refreshBoardBtn").onclick=()=>renderBoard(currentTab);
-$("#shareRoomBtn").onclick=()=>{
-  const url=location.href.split("#")[0];
-  navigator.clipboard?.writeText(url).then(()=>toast("🔗 Lien du jeu copié !")).catch(()=>toast("Lien prêt !"));
-};
-document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>renderBoard(b.dataset.tab));
-$("#modal").onclick=e=>{if(e.target===$("#modal"))e.target.classList.remove("open");};
 
-/* ================= BOOT ================= */
-async function boot(){
-  if(typeof L==="undefined"){
-    document.body.innerHTML="<div style='max-width:600px;margin:60px auto;padding:24px;font-family:system-ui;color:#e8ecff'>"
-    +"<h1>🌍 TerraPin</h1><p>La librairie de cartes n'a pas pu être chargée.</p></div>";
-    return;
-  }
-  loadLocalFallback();
-  await initCloudSync();
-  initMap();
-  
-  // Ne sélectionne JAMAIS automatiquement le compte d'un autre joueur
-  if (currentUsername && dbState.profiles[currentUsername]) {
-    const owner = dbState.profiles[currentUsername].ownerUid;
-    if (owner && currentUid && owner !== currentUid) {
-      currentUsername = null;
-      localStorage.removeItem("terrapin_current_user");
-    }
-  } else {
-    currentUsername = null;
-  }
-
-  renderHome(); show("home");
-  if (!P()) {
-    openProfileModal();
-  }
+// Liaison directe et explicite pour le bouton TerraChrono
+const goHistBtn = $("#goHistBtn");
+if(goHistBtn) {
+  goHistBtn.onclick = () => {
+    renderHist();
+    show("hist");
+  };
 }
-boot();
-</script>
-</body>
-</html>
+
+$("#homeBtn").onclick=()=>{renderHome();show("home");};
+// ... existing code ... -->
