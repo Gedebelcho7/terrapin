@@ -113,6 +113,7 @@
 
   <!-- ACCUEIL -->
   <section id="screen-home" class="screen active">
+    <div id="homeFriseBanner"></div>
     <div class="card hero">
       <div class="row"><span class="tag" id="homeDate"></span><span class="tag" id="homeStreak"></span></div>
       <h1>🎯 Défi du jour</h1>
@@ -126,7 +127,7 @@
         <button class="btn" data-go="training">S'entraîner</button></div>
       <div class="card"><h2>🛠️ Défis de joueurs</h2><p class="mut">Joue les défis en ligne des autres, crée les tiens, gagne des points d'auteur.</p>
         <button class="btn" data-go="challenges">Ouvrir</button></div>
-      <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale (solo ou multi sans blocage), défi quotidien Wikipédia.</p>
+      <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale (solo ou multi en ligne), défi quotidien Wikipédia.</p>
         <button class="btn" data-go="hist">Entrer dans le temps</button></div>
       <div class="card"><h2>🏆 Classements &amp; Hall of Fame</h2><p class="mut">Jour, saison, all-time, Hall of Fame, Hall of Shame (les pls) et archives des vainqueurs.</p>
         <button class="btn" data-go="board">Voir</button></div>
@@ -264,16 +265,20 @@
     <button class="btn small backbtn" data-go="home">← Retour</button>
     <div class="card hero" style="margin-top:52px">
       <h1>📜 TerraChrono</h1>
-      <p class="mut">L'histoire sans les dates : place les cartes dans le bon ordre sur la frise. Mode solo ou multi sans blocage.</p>
+      <p class="mut">L'histoire sans les dates : place les cartes dans le bon ordre sur la frise. Mode solo ou multi en ligne.</p>
       <div class="big" id="histDailyStatus"></div>
       <div style="margin-top:10px"><button class="btn primary" id="histDailyBtn">📅 Défi du jour</button></div>
       <div class="mut" id="ephemBox" style="margin-top:14px"></div>
     </div>
     <div class="card">
-      <h2>⚔️ Frise royale (solo ou multi)</h2>
-      <p class="mut">Sélectionne une carte de ta main puis clique un ➕ sur la frise. Bien placée : elle reste et tu repioches. Erreur : éliminé (sauf bouclier). En solo, teste sans joueur additionnel sans aucun blocage !</p>
+      <h2>⚔️ Frise royale en ligne (Multijoueur &amp; Solo)</h2>
+      <p class="mut">Crée une partie en ligne (les autres joueurs peuvent la rejoindre depuis leur écran) ou lance une partie solo immédiate. Dès que c'est ton tour, tu es prévenu sur l'accueil ! <b>100 pts par carte placée</b>, le plus haut score gagne (+50 pts bonus).</p>
       <div class="mut" style="margin:6px 0">Bonus : 🛡️ Bouclier · 🔍 Loupe · 🎲 Chance — et attention au ⏳ Sablier !</div>
-      <button class="btn gold" id="friseStart">Lancer la frise ➜</button>
+      <div id="friseRoomsList" style="margin:12px 0"></div>
+      <div class="row">
+        <button class="btn gold" id="friseCreateOnline">🌐 Créer une partie en ligne</button>
+        <button class="btn" id="friseStartSolo">👤 Lancer en solo</button>
+      </div>
     </div>
     <div class="grid">
       <div class="card"><h2>📊 Stats histoire</h2><div id="histStats" class="mut"></div></div>
@@ -530,7 +535,7 @@ monuments:[
  {p:"Clique sur le Colisée",lat:41.8902,lon:12.4922,d:1,fact:"Il accueillait jusqu'à 50 000 spectateurs."},
  {p:"Clique sur la statue de la Liberté",lat:40.6892,lon:-74.0445,d:1,fact:"Cadeau de la France pour le centenaire de l'indépendance des USA."},
  {p:"Clique sur l'opéra de Sydney",lat:-33.8568,lon:151.2153,d:1,fact:"Conçu à partir d'écorces d'orange découpées par l'architecte."},
- {p:"Clique sur le Taj Mahal",lat:27.1751,lon:78.0421,d:2,hint:"Inde",fact:"Mausolée pour l'épouse de l'empereur Shah Jahan, 20 000 ouvriers."},
+ {p:"Clique sur le Taj Mahal",lat:27.1751,lon:78.0421,d:2,hint:"Inde",fact:"Mausolée pour l'épouse de l'empereur moghol Shah Jahan, 20 000 ouvriers."},
  {p:"Clique sur la Grande Muraille (secteur de Mutianyu)",lat:40.4319,lon:116.5704,d:2,hint:"Au nord de Pékin",fact:"Longue de 21 196 km en comptant toutes les branches."},
  {p:"Clique sur le Christ Rédempteur",lat:-22.9519,lon:-43.2105,d:2,hint:"Rio",fact:"38 m de haut, bras ouverts sur la baie de Guanabara."},
  {p:"Clique sur le Machu Picchu",lat:-13.1631,lon:-72.545,d:2,hint:"Cordillère des Andes, Pérou",fact:"Bâti sans mortier ni roues, à 2430 m d'altitude."},
@@ -837,59 +842,64 @@ const EPHEM=[
 ];
 
 /* ================= FIREBASE CLOUD STATE & SYNC ================= */
-let dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {}, resetEpoch: 0 };
+let dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {}, friseRooms: {}, resetEpoch: 0 };
 let currentUsername = localStorage.getItem("terrapin_current_user") || null;
 let firestoreDb = null, firebaseAuth = null, stateDocRef = null, currentUid = null;
+let activeRoomId = null;
 
 function setSyncStatus(state, text) {
   const dot = $("#syncDot");
   const lbl = $("#syncLabel");
-  if (!dot || !lbl) return;
-  if (state === "ok") {
-    dot.style.background = "#34d399";
-    lbl.textContent = text || "En ligne";
-  } else if (state === "sync") {
-    dot.style.background = "#fbbf24";
-    lbl.textContent = text || "Synchro…";
-  } else {
-    dot.style.background = "#f87171";
-    lbl.textContent = text || "Hors-ligne";
+  if (lbl) lbl.textContent = text;
+  if (dot) {
+    dot.style.background = state === "online" ? "#34d399" : (state === "offline" ? "#f87171" : "#fbbf24");
   }
 }
 
-function mergeStates(remote) {
-  if (!remote || typeof remote !== "object") return;
-  
-  // Détection d'une remise à zéro globale déclenchée par l'admin
-  const remoteEpoch = remote.resetEpoch || 0;
-  const localEpoch = dbState.resetEpoch || 0;
-  if (remoteEpoch > localEpoch) {
-    dbState = JSON.parse(JSON.stringify(remote));
-    localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
-    toast("🔄 L'administrateur a effectué une remise à zéro globale !");
-    return;
-  }
+function loadLocalFallback() {
+  try {
+    const raw = localStorage.getItem("terrapin_v1");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      dbState.profiles = parsed.profiles || {};
+      dbState.challenges = parsed.challenges || {};
+      dbState.seasonArchives = parsed.seasonArchives || {};
+      dbState.friseRooms = parsed.friseRooms || {};
+      dbState.resetEpoch = parsed.resetEpoch || 0;
+    }
+    const qRaw = localStorage.getItem("terrapin_quiz_user");
+    if (qRaw) dbState.quizUser = JSON.parse(qRaw) || [];
+  } catch (e) {}
+}
 
+function saveLocalFallback() {
+  try {
+    localStorage.setItem("terrapin_v1", JSON.stringify({
+      profiles: dbState.profiles,
+      challenges: dbState.challenges,
+      seasonArchives: dbState.seasonArchives,
+      friseRooms: dbState.friseRooms,
+      resetEpoch: dbState.resetEpoch
+    }));
+    localStorage.setItem("terrapin_quiz_user", JSON.stringify(dbState.quizUser));
+  } catch (e) {}
+}
+
+function mergeRemoteState(remote) {
+  if (!remote) return;
+  const remoteEpoch = remote.resetEpoch || 0;
+  if (remoteEpoch > (dbState.resetEpoch || 0)) {
+    dbState.profiles = {};
+    dbState.challenges = {};
+    dbState.seasonArchives = {};
+    dbState.friseRooms = {};
+    dbState.quizUser = [];
+    dbState.resetEpoch = remoteEpoch;
+    currentUsername = null;
+    localStorage.removeItem("terrapin_current_user");
+  }
   if (remote.profiles && typeof remote.profiles === "object") {
-    Object.keys(remote.profiles).forEach(k => {
-      const rp = remote.profiles[k];
-      const lp = dbState.profiles[k];
-      if (!lp) {
-        dbState.profiles[k] = rp;
-      } else {
-        const rPts = rp.points || 0;
-        const lPts = lp.points || 0;
-        const rAns = (rp.stats && rp.stats.answered) || 0;
-        const lAns = (lp.stats && lp.stats.answered) || 0;
-        if (k !== currentUsername || rPts > lPts || rAns > lAns) {
-          dbState.profiles[k] = Object.assign({}, lp, rp);
-          dbState.profiles[k].points = Math.max(rPts, lPts);
-          dbState.profiles[k].daily = Object.assign({}, lp.daily || {}, rp.daily || {});
-          dbState.profiles[k].seasonPts = Object.assign({}, lp.seasonPts || {}, rp.seasonPts || {});
-          dbState.profiles[k].seasonDays = Object.assign({}, lp.seasonDays || {}, rp.seasonDays || {});
-        }
-      }
-    });
+    dbState.profiles = Object.assign({}, dbState.profiles, remote.profiles);
   }
   if (remote.challenges && typeof remote.challenges === "object") {
     dbState.challenges = Object.assign({}, dbState.challenges, remote.challenges);
@@ -897,1381 +907,744 @@ function mergeStates(remote) {
   if (remote.seasonArchives && typeof remote.seasonArchives === "object") {
     dbState.seasonArchives = Object.assign({}, dbState.seasonArchives, remote.seasonArchives);
   }
-  if (remote.quizUser && Array.isArray(remote.quizUser)) {
-    const ids = new Set((dbState.quizUser || []).map(x => x.id));
-    remote.quizUser.forEach(q => {
-      if (q && q.id && !ids.has(q.id)) {
-        dbState.quizUser.push(q);
-        ids.add(q.id);
-      }
-    });
+  if (remote.friseRooms && typeof remote.friseRooms === "object") {
+    dbState.friseRooms = Object.assign({}, remote.friseRooms);
   }
+  if (remote.quizUser && Array.isArray(remote.quizUser)) {
+    const map = new Map();
+    dbState.quizUser.forEach(x => map.set(x.id, x));
+    remote.quizUser.forEach(x => map.set(x.id, x));
+    dbState.quizUser = Array.from(map.values());
+  }
+  saveLocalFallback();
 }
 
-async function initCloudSync(){
-  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("REMPLACE")) {
-    setSyncStatus("err", "Config Firebase manquante");
-    console.warn("⚠️ Configure firebaseConfig avec tes clés Firebase !");
+async function initCloudSync() {
+  if (firebaseConfig.apiKey === "REMPLACE_PAR_TON_API_KEY") {
+    setSyncStatus("offline", "Mode local (Config Firebase à remplir)");
     return;
   }
-
   try {
-    setSyncStatus("sync", "Connexion…");
     const app = initializeApp(firebaseConfig);
     firebaseAuth = getAuth(app);
     firestoreDb = getFirestore(app);
-
     const cred = await signInAnonymously(firebaseAuth);
     currentUid = cred.user.uid;
     stateDocRef = doc(firestoreDb, "terrapin", "global_state");
 
-    onSnapshot(stateDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const remote = docSnap.data();
-        mergeStates(remote);
-        localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
-        setSyncStatus("ok", "En ligne");
-        
-        // Vérifie si le profil actuel appartient bien à cet appareil
-        if (currentUsername && dbState.profiles[currentUsername]) {
-          const owner = dbState.profiles[currentUsername].ownerUid;
-          if (owner && currentUid && owner !== currentUid) {
-            currentUsername = null;
-            localStorage.removeItem("terrapin_current_user");
-          }
-        }
-        
+    onSnapshot(stateDocRef, (snap) => {
+      setSyncStatus("online", "En ligne · Temps réel");
+      if (snap.exists()) {
+        mergeRemoteState(snap.data());
         renderHome();
         if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
         if (document.querySelector("#screen-challenges.active")) renderChallenges();
+        if (document.querySelector("#screen-hist.active")) renderHist();
+        if (document.querySelector("#screen-frise.active") && activeRoomId) renderFrise();
       } else {
         setDoc(stateDocRef, dbState);
       }
     }, (err) => {
-      console.error("Erreur Firestore :", err);
-      setSyncStatus("err", "Erreur Firestore");
+      console.warn("Erreur Firestore:", err);
+      setSyncStatus("offline", "Hors-ligne (sauvegarde locale)");
     });
   } catch (e) {
-    console.error("Erreur d'initialisation Firebase :", e);
-    setSyncStatus("err", "Hors-ligne");
+    console.warn("Firebase init erreur:", e);
+    setSyncStatus("offline", "Hors-ligne (sauvegarde locale)");
   }
 }
 
-function loadLocalFallback(){
+async function saveCloud(immediate = false) {
+  saveLocalFallback();
+  if (!stateDocRef) return;
   try {
-    const local = JSON.parse(localStorage.getItem("terrapin_online_cache"));
-    if (local) dbState = local;
-  } catch(e){}
-}
-
-async function saveCloud(overwrite = false){
-  try {
-    localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
-    if (currentUsername) localStorage.setItem("terrapin_current_user", currentUsername);
-    if (firestoreDb && stateDocRef && firebaseAuth && firebaseAuth.currentUser) {
-      setSyncStatus("sync", "Sauvegarde…");
-      await setDoc(stateDocRef, dbState, { merge: !overwrite });
-      setSyncStatus("ok", "En ligne");
-    }
-  } catch(e) {
-    console.error("Erreur sauvegarde Firebase :", e);
-    setSyncStatus("err", "Erreur synchro");
+    await setDoc(stateDocRef, dbState, { merge: true });
+  } catch (e) {
+    console.warn("Erreur écriture cloud:", e);
   }
 }
 
-function P(){
-  if (!currentUsername || !dbState.profiles[currentUsername]) return null;
-  const pr = dbState.profiles[currentUsername];
-  // Sécurité : bloque l'accès si le profil appartient à un autre UID
-  if (pr.ownerUid && currentUid && pr.ownerUid !== currentUid) return null;
-  return pr;
+function P() {
+  if (!currentUsername) return null;
+  const p = dbState.profiles[currentUsername];
+  if (!p) {
+    currentUsername = null;
+    localStorage.removeItem("terrapin_current_user");
+    return null;
+  }
+  // Vérifie que le profil appartient bien à cet appareil / navigateur
+  if (p.ownerUid && currentUid && p.ownerUid !== currentUid) {
+    currentUsername = null;
+    localStorage.removeItem("terrapin_current_user");
+    return null;
+  }
+  if (!p.seasons) p.seasons = {};
+  if (!p.catStats) p.catStats = {};
+  if (!p.ach) p.ach = [];
+  if (typeof p.trainingPoints !== "number") p.trainingPoints = 0;
+  if (typeof p.trainingPlays !== "number") p.trainingPlays = 0;
+  if (typeof p.trainingPerfects !== "number") p.trainingPerfects = 0;
+  if (typeof p.trainingHits !== "number") p.trainingHits = 0;
+  if (typeof p.plseCount !== "number") p.plseCount = 0;
+  if (typeof p.seasonWins !== "number") p.seasonWins = 0;
+  return p;
 }
 
-function isAdmin(){
+function isAdmin() {
   const p = P();
-  if(!p) return false;
-  const allNames = Object.keys(dbState.profiles).sort((a,b)=>dbState.profiles[a].created - dbState.profiles[b].created);
-  return allNames.length > 0 && allNames[0] === currentUsername;
+  if (!p) return false;
+  const list = Object.values(dbState.profiles);
+  if (!list.length) return false;
+  list.sort((a, b) => (a.created || 0) - (b.created || 0));
+  return list[0].name === p.name || p.isAdmin === true;
 }
 
-function newProfile(name, pin){
-  dbState.profiles[name] = {
-    name: name,
-    ownerUid: currentUid || ("local-" + Date.now()),
-    pin: pin || "0000",
-    created: Date.now(),
-    points: 0,
-    seasonPts: {},
-    seasonDays: {},
-    daily: {},
-    lastDaily: null,
-    streak: 0,
-    bestDaily: 0,
-    stats: { answered: 0, perfect: 0, distSum: 0, byCat: {} },
-    ach: {},
-    authorPts: 0,
-    createdCh: [],
-    playedCh: {},
-    trainPts: 0,
-    bestCombo: 0,
-    qz: { pts: 0, ok: 0, n: 0, answered: {}, dil: {}, daily: {}, created: 0 }
-  };
-  currentUsername = name;
-  saveCloud();
+function getProfileList() {
+  return Object.values(dbState.profiles);
 }
 
-/* ================= RÉUSSITES & BADGES ÉTENDUS ================= */
-const ACH=[
- {id:"first",ico:"🎮",n:"Premier pas",d:"Terminer une première partie",c:function(p){return p.stats.answered>0;}},
- {id:"perfect",ico:"🎯",n:"Sans-faute",d:"Une réponse parfaite (dans la tolérance)",c:function(p){return p.stats.perfect>0;}},
- {id:"combo5",ico:"🔥",n:"En feu",d:"5 réponses de suite à 60 %+ de précision",c:function(p){return (p.bestCombo||0)>=5;}},
- {id:"combo10",ico:"⚡",n:"Foudre de guerre",d:"10 réponses de suite avec excellente précision",c:function(p){return (p.bestCombo||0)>=10;}},
- {id:"streak3",ico:"📅",n:"Habitué",d:"Série de 3 jours sur le défi quotidien",c:function(p){return p.streak>=3;}},
- {id:"streak7",ico:"🗓️",n:"Semaine complète",d:"Série de 7 jours",c:function(p){return p.streak>=7;}},
- {id:"streak30",ico:"🏆",n:"Machine",d:"Série de 30 jours",c:function(p){return p.streak>=30;}},
- {id:"q100",ico:"🧠",n:"Cent questions",d:"Répondre à 100 questions",c:function(p){return p.stats.answered>=100;}},
- {id:"q500",ico:"📚",n:"Encyclopédie",d:"Répondre à 500 questions",c:function(p){return p.stats.answered>=500;}},
- {id:"carto",ico:"🗺️",n:"Cartographe",d:"50 réponses ou plus, erreur moyenne < 200 km",c:function(p){return p.stats.answered>=50&&p.stats.distSum/p.stats.answered<200;}},
- {id:"sharp",ico:"🔬",n:"Chirurgien",d:"Moins de 50 km d'erreur en difficulté experte",c:function(p){return p.sharpExpert===true;}},
- {id:"cats",ico:"🌐",n:"Explorateur",d:"Jouer dans les 8 catégories",c:function(p){return Object.keys(p.stats.byCat).length>=8;}},
- {id:"daily4k",ico:"💎",n:"Journée de diamant",d:"4000 points ou plus sur un défi quotidien",c:function(p){return p.bestDaily>=4000;}},
- {id:"creator",ico:"🛠️",n:"Architecte",d:"Créer son premier défi",c:function(p){return p.createdCh.length>0;}},
- {id:"host",ico:"🎤",n:"Animateur",d:"Jouer 10 défis d'autres joueurs",c:function(p){return Object.keys(p.playedCh).length>=10;}},
- {id:"speedrun",ico:"⏱️",n:"Éclair",d:"Valider un défi en moins de 10 secondes",c:function(p){return p.speedrun===true;}},
- {id:"globetrotter",ico:"✈️",n:"Globe-trotter",d:"Plus de 1000 points cumulés en entraînement",c:function(p){return (p.trainPts||0)>=1000;}},
- {id:"nightowl",ico:"🌙",n:"Oiseau de nuit",d:"Jouer entre minuit et 5h du matin",c:function(p){return p.nightOwl===true;}}
-];
-const ACH_H=[
- {id:"hfirst",ico:"📜",n:"Historien en herbe",d:"Participer à une frise",c:function(p){return p.hist&&p.hist.rounds>0;}},
- {id:"hwin",ico:"👑",n:"Dernier debout",d:"Gagner une frise",c:function(p){return p.hist&&p.hist.wins>=1;}},
- {id:"hwin3",ico:"👑",n:"Empereur",d:"Gagner 3 frises",c:function(p){return p.hist&&p.hist.wins>=3;}},
- {id:"hplace10",ico:"🧩",n:"Tisseur du temps",d:"10 placements réussis sur les frises",c:function(p){return p.hist&&p.hist.placements>=10;}},
- {id:"hplace25",ico:"🏛️",n:"Antiquaire",d:"25 placements réussis",c:function(p){return p.hist&&p.hist.placements>=25;}},
- {id:"hperfect",ico:"🧠",n:"Mémoire absolue",d:"Gagner une frise sans erreur ni repioche",c:function(p){return p.hist&&p.hist.perfectWins>=1;}},
- {id:"hdaily",ico:"📅",n:"Éphéméride",d:"5/5 au défi quotidien histoire",c:function(p){return p.hist&&p.hist.best>=5000;}},
- {id:"hstreak7",ico:"🔥",n:"Rat de bibliothèque",d:"Série histoire de 7 jours",c:function(p){return p.hist&&p.hist.streak>=7;}}
-];
-const ALLACH=ACH.concat(ACH_H);
-function checkAch(){
-  const p=P(); if(!p)return;
-  const hr=new Date().getHours();
-  if(hr>=0&&hr<5)p.nightOwl=true;
-  ALLACH.forEach(function(a){ if(!p.ach[a.id]&&a.c(p)){p.ach[a.id]=Date.now();toast(a.ico+" Réussite débloquée : "+a.n);beep(880,.25);} });
-  saveCloud();
-}
+/* ================= PROFIL & ADMIN ================= */
+function openProfileModal(force) {
+  const profiles = getProfileList();
+  const me = P();
+  const myProfiles = profiles.filter(p => !p.ownerUid || !currentUid || p.ownerUid === currentUid);
 
-/* ================= TERRAQUIZ ================= */
-const GRADES=[{n:"Novice",xp:0,ico:"🌱"},{n:"Apprenti",xp:100,ico:"🛠️"},{n:"Connaisseur",xp:300,ico:"🧠"},
-{n:"Artisan",xp:700,ico:"🎨"},{n:"Maître",xp:1500,ico:"🎓"},{n:"Sage",xp:3000,ico:"🦉"},{n:"Légende",xp:5000,ico:"🌟"}];
-function gradeFor(xp){let g=GRADES[0];GRADES.forEach(function(x){if(xp>=x.xp)g=x;});return g;}
-const QZ_QUIZ=[
-["Quel est le plus grand océan du monde ?","Pacifique",["Atlantique","Indien","Arctique"],"Géographie"],
-["Combien de pattes a une araignée ?","8",["6","10","12"],"Animaux"],
-["Quelle planète est la plus proche du Soleil ?","Mercure",["Vénus","Mars","La Terre"],"Sciences"],
-["En quelle année l'homme a-t-il marché sur la Lune pour la première fois ?","1969",["1965","1972","1961"],"Histoire"],
-["Quel est l'animal terrestre le plus rapide ?","Guépard",["Lion","Antilope","Cheval"],"Animaux"],
-["Combien de joueurs par équipe sur un terrain de football ?","11",["10","12","9"],"Sport"],
-["Quelle est la couleur du sang d'un poulpe ?","Bleu",["Vert","Rouge","Transparent"],"Animaux"],
-["Quelle est la capitale de l'Australie ?","Canberra",["Sydney","Melbourne","Perth"],"Géographie"],
-["Combien de cordes a une guitare classique ?","6",["4","5","7"],"Musique"],
-["Dans quel jeu vidéo trouve-t-on des Creepers ?","Minecraft",["Fortnite","Roblox","Terraria"],"Jeux vidéo"],
-["Quelle vitamine le soleil nous aide-t-il à produire ?","Vitamine D",["Vitamine C","Vitamine A","Vitamine B12"],"Sciences"],
-["Combien de côtés a un hexagone ?","6",["5","7","8"],"Culture G"],
-["Qui a peint La Nuit étoilée ?","Vincent van Gogh",["Claude Monet","Pablo Picasso","Léonard de Vinci"],"Arts"],
-["Quelle est la vitesse de la lumière (approx.) ?","300 000 km/s",["300 000 m/s","150 000 km/s","1 million de km/s"],"Sciences"],
-["Combien de temps dure un match de rugby (hors prolongations) ?","80 minutes",["60 minutes","90 minutes","100 minutes"],"Sport"],
-["Quel est le plus grand désert du monde ?","L'Antarctique",["Le Sahara","Le Gobi","L'Atacama"],"Géographie"],
-["Combien d'os a le corps humain adulte ?","206",["180","230","156"],"Sciences"],
-["Quelle maison de Poudlard a un serpent pour emblème ?","Serpentard",["Gryffondor","Poufsouffle","Serdaigle"],"Cinéma & livres"],
-["Quel pays mange le plus de chocolat par habitant ?","La Suisse",["La France","Les États-Unis","La Belgique"],"Bouffe"],
-["Combien de touches a un piano classique ?","88",["76","92","64"],"Musique"],
-["Quelle mer est la plus salée ?","La mer Morte",["La mer Rouge","La mer Baltique","La mer des Caraïbes"],"Géographie"],
-["Combien de cœurs a une pieuvre ?","3",["1","2","4"],"Animaux"],
-["Quel est le symbole chimique de l'or ?","Au",["Or","Ag","Fe"],"Sciences"],
-["Quel pays a gagné la Coupe du monde de foot 2018 ?","La France",["La Croatie","Le Brésil","L'Allemagne"],"Sport"],
-["Combien de temps met la Terre pour tourner sur elle-même ?","23 h 56",["24 h exactement","22 h 30","25 h"],"Sciences"],
-["Quelle est la monnaie du Japon ?","Le yen",["Le won","Le yuan","Le dollar"],"Culture G"]
-];
-const QZ_DIL=[
-["Bras en mousse","Jambes en mousse"],
-["Ne plus jamais manger de fromage","Ne plus jamais manger de dessert"],
-["Pouvoir voler à 10 km/h max","Être invisible 10 secondes par jour"],
-["Vivre sans internet","Vivre sans musique"],
-["Toujours dire ce que tu penses","Ne jamais pouvoir parler de toi"],
-["Pizza ananas autorisée uniquement","Pizza sans fromage à vie"],
-["Voyager dans le passé","Voyager dans le futur"],
-["Être hyper riche mais connu de tous","Être discret et bien à l'aise"],
-["Ne plus jamais avoir sommeil","Ne plus jamais avoir faim"],
-["Parler toutes les langues","Jouer parfaitement de tous les instruments"],
-["1 cheval de la taille d'un canard","100 canards de la taille d'un cheval"],
-["Lire dans les pensées","Voir le futur sans pouvoir le changer"],
-["Toujours avoir 2 heures d'avance","Toujours avoir 2 heures de retard"],
-["Perdre ton téléphone 1 mois","Perdre ton ordi 1 mois"],
-["Manger le même plat à vie","Ne jamais manger 2 fois le même plat"],
-["Vacances toujours à la montagne","Vacances toujours à la plage"],
-["Ne plus jamais utiliser d'emoji","Ne plus jamais utiliser de majuscules"],
-["Être célèbre pour un truc que tu n'as pas fait","Jamais reconnu pour ce que tu as fait"]
-];
-const QZ_ORDRE=[
-["Classe ces planètes de la plus proche à la plus lointaine du Soleil",["Mercure","Vénus","Terre","Mars"],"Sciences"],
-["Classe ces animaux du plus petit au plus grand",["Souris","Chat","Cheval","Éléphant"],"Animaux"],
-["Classe ces événements du plus ancien au plus récent",["Invention de l'écriture","Chute de l'Empire romain","Révolution française","Premier pas sur la Lune"],"Histoire"],
-["Classe du plus rapide au plus lent",["Guépard","Lion","Humain (sprint)","Tortue"],"Animaux"]
-];
-const QZ_CLASSEMENT=[
-["Classe ces plats de ton préféré au moins aimé",["Pizza","Burger","Sushi","Tacos"]],
-["Classe ces saisons de ta préférée à la moins aimée",["Printemps","Été","Automne","Hiver"]],
-["Classe ces jeux du meilleur au pire selon toi",["Minecraft","Fortnite","Mario Kart","FIFA"]],
-["Classe ces trucs du plus relou au moins relou",["Les embouteillages","Les réunions","Les appels inconnus","Les files d'attente"]]
-];
-
-let qzTab="daily",qzPlay=null;
-function qzUser(){if(!dbState.quizUser)dbState.quizUser=[];return dbState.quizUser;}
-function qzAll(){return QZ_QUIZ.map(function(r,i){return {id:"pack-"+i,type:"quiz",q:r[0],good:r[1],bads:r[2],theme:r[3],by:null};})
- .concat(QZ_ORDRE.map(function(r,i){return {id:"ord-"+i,type:"ordre",q:r[0],items:r[1],theme:r[2],by:null};}))
- .concat(qzUser());}
-function qzDilAll(){return QZ_DIL.map(function(r,i){return {id:"dil-"+i,type:"dil",opts:[r[0],r[1]],by:null};})
- .concat(qzUser().filter(function(x){return x.type==="dil";}).map(function(x){return {id:x.id,type:"dil",opts:x.opts||[x.a,x.b],q:x.q,by:x.by};}));}
-function qzClsAll(){return QZ_CLASSEMENT.map(function(r,i){return {id:"cls-"+i,type:"classement",q:r[0],items:r[1],by:null};})
- .concat(qzUser().filter(function(x){return x.type==="classement";}).map(function(x){return {id:x.id,type:"classement",q:x.q,items:x.items,by:x.by};}));}
-function qzDaySt(p){const q=p.qz,dk=todayKey();
-  if(!q.daily[dk])q.daily[dk]={n:0,okQuiz:0,created:0,m1:false,m2:false,m3:false};
-  return q.daily[dk];}
-function qzXP(p,n){
-  const q=p.qz, before=gradeFor(q.pts).n;
-  q.pts+=n;
-  const after=gradeFor(q.pts).n;
-  if(after!==before)toast(after.ico+" Grade TerraQuiz : "+after.n+" !");
-  checkAch(); saveCloud();
-}
-function qzDaily(){
-  const rng=mulberry32(hashCode("qz-"+todayKey()));
-  const quiz=QZ_QUIZ[Math.floor(rng()*QZ_QUIZ.length)];
-  const dil=QZ_DIL[Math.floor(rng()*QZ_DIL.length)];
-  return {quiz:{q:quiz[0],good:quiz[1],bads:quiz[2],theme:quiz[3]},dil:dil};
-}
-function qzAffinity(){
-  const me=P(); if(!me||!me.qz)return [];
-  return Object.keys(dbState.profiles).filter(function(n){return n!==currentUsername;}).map(function(n){
-    const oq=dbState.profiles[n].qz; let common=0,same=0;
-    if(oq){
-      Object.keys(me.qz.dil).forEach(function(k){if(oq.dil[k]!==undefined){common++;if(oq.dil[k]===me.qz.dil[k])same++;}});
-      if(me.qz.rank&&oq.rank)Object.keys(me.qz.rank).forEach(function(k){
-        if(oq.rank[k]!==undefined){
-          const a=me.qz.rank[k], b=oq.rank[k];
-          for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
-            common++;
-            if(b.indexOf(a[i])<b.indexOf(a[j]))same++;
-          }
-        }
-      });
-    }
-    return {n:n,p:common?Math.round(same/common*100):null};
-  }).filter(function(x){return x.p!==null;}).sort(function(x,y){return y.p-x.p;});
-}
-function renderQuiz(){
-  const box=$("#quizBox");
-  const tabs=[["daily","📅 Défi du jour"],["quiz","🧠 Quiz"],["dilemme","🤔 Dilemmes"],["creer","✨ Créer"],["missions","🎯 Missions"],["stats","📊 Stats"]];
-  box.innerHTML="<div class='row' style='flex-wrap:wrap'>"+tabs.map(function(t){
-    return "<button class='btn small"+(qzTab===t[0]?" gold":"")+"' data-qtab='"+t[0]+"'>"+t[1]+"</button>";
-  }).join("")+"</div><div id='qzBody' style='margin-top:14px'></div>";
-  box.querySelectorAll("[data-qtab]").forEach(function(b){b.onclick=function(){qzTab=b.dataset.qtab;renderQuiz();};});
-  const body=$("#qzBody");
-  if(!P()){body.innerHTML="<p class='mut'>Choisis un profil d'abord (en haut à droite) pour gagner des grades !</p>";return;}
-  if(qzTab==="daily")qzRenderDaily(body);
-  else if(qzTab==="quiz")qzRenderQuiz(body);
-  else if(qzTab==="dilemme")qzRenderDil(body);
-  else if(qzTab==="creer")qzRenderCreate(body);
-  else if(qzTab==="stats")qzRenderStats(body);
-  else qzRenderMissions(body);
-}
-function qzRenderDaily(body){
-  const p=P(),q=p.qz,d=qzDaily(),st=qzDaySt(p);
-  const doneQ=st.qa!==undefined, doneD=st.da!==undefined;
-  let html="<h2>📅 Défis du jour</h2>";
-  if(!doneQ){
-    const opts=d.quiz.bads.concat([d.quiz.good]).sort(function(){return Math.random()-0.5;});
-    st._dopts=opts;
-    html+="<div class='card' style='margin-top:10px'><b>"+esc(d.quiz.q)+"</b><div style='margin-top:8px'>"
-      +opts.map(function(o,i){return "<button class='btn small' style='display:block;width:100%;margin:4px 0' data-dq='"+i+"'>"+esc(o)+"</button>";}).join("")+"</div></div>";
-  } else html+="<div class='card' style='margin-top:10px'>✅ Question du jour faite — "+(st.qok?"bonne réponse 👍":"raté 😅")+" (+"+st.qxp+" XP)</div>";
-  if(!doneD){
-    html+="<div class='card' style='margin-top:10px'><b>🤔 Tu préfères : "+esc(d.dil[0])+" ou "+esc(d.dil[1])+" ?</b>"
-      +"<div style='margin-top:8px'><button class='btn small' data-dd='0'>"+esc(d.dil[0])+"</button> <button class='btn small' data-dd='1'>"+esc(d.dil[1])+"</button></div></div>";
-  } else html+="<div class='card' style='margin-top:10px'>✅ Dilemme du jour fait (+"+st.dxp+" XP)</div>";
-  const g=gradeFor(q.pts);
-  html+="<div class='mut' style='margin-top:10px'>"+g.ico+" "+g.n+" · "+q.pts+" XP</div>";
-  body.innerHTML=html;
-  body.querySelectorAll("[data-dq]").forEach(function(b){b.onclick=function(){
-    const val=st._dopts[parseInt(b.dataset.dq,10)];
-    const ok=val===d.quiz.good;
-    st.qa=val; st.qok=ok; st.qxp=ok?25:5; st.n++;
-    if(ok)q.ok++;
-    q.n++;
-    qzXP(p,st.qxp);
-    toast(ok?"✅ +25 XP !":"😅 +5 XP de participation");
-    saveCloud(); renderQuiz();
-  };});
-  body.querySelectorAll("[data-dd]").forEach(function(b){b.onclick=function(){
-    st.da=parseInt(b.dataset.dd,10); st.dxp=10; st.n++;
-    qzXP(p,10);
-    toast("🤔 Choix noté ! +10 XP");
-    saveCloud(); renderQuiz();
-  };});
-}
-function qzRenderQuiz(body){
-  const all=qzAll();
-  if(!qzPlay||qzPlay.done||qzPlay.i>=qzPlay.list.length){
-    qzPlay={list:all.slice().sort(function(){return Math.random()-0.5;}),i:0,pts:0,done:false};
+  let html = "<h2>👤 Ton compte joueur</h2>";
+  if (me) {
+    html += "<div class='card' style='background:var(--card2);margin:8px 0'><b>Connecté : " + esc(me.name) + (isAdmin() ? " 👑 (Admin)" : "") + "</b>"
+      + "<div class='mut'>" + fmt(me.points) + " pts saison · " + fmt(me.totalPoints) + " pts général</div>"
+      + "<button class='btn small danger' id='logoutBtn' style='margin-top:8px'>🚪 Se déconnecter</button></div>";
   }
-  const item=qzPlay.list[qzPlay.i];
-  if(item.type==="ordre"){qzPlayOrder(item,body);return;}
-  const q=P().qz;
-  const opts=item.bads.concat([item.good]).sort(function(){return Math.random()-0.5;});
-  body.innerHTML="<h2>🧠 Quiz"+(item.theme?" · "+esc(item.theme):"")+"</h2>"
-   +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
-   +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
-   +"<div style='margin-top:8px'>"+opts.map(function(o,i){return "<button class='btn small' style='display:block;width:100%;margin:4px 0' data-qo='"+i+"'>"+esc(o)+"</button>";}).join("")+"</div>"
-   +"<div id='qzFb' style='margin-top:8px'></div></div>"
-   +"<div class='mut' style='margin-top:8px'>Question "+(qzPlay.i+1)+"/"+qzPlay.list.length+" · session "+qzPlay.pts+" XP</div>";
-  body.querySelectorAll("[data-qo]").forEach(function(b){b.onclick=function(){
-    const val=opts[parseInt(b.dataset.qo,10)], ok=val===item.good;
-    const q2=P().qz, first=!q2.answered[item.id], dst=qzDaySt(P());
-    q2.answered[item.id]=ok?1:2; q2.n++; if(ok)q2.ok++;
-    dst.n++; if(ok)dst.okQuiz++;
-    const xp=ok?(first?15:3):(first?5:0);
-    qzPlay.pts+=xp; qzXP(P(),xp);
-    body.querySelectorAll("[data-qo]").forEach(function(x){
-      x.disabled=true;
-      if(opts[parseInt(x.dataset.qo,10)]===item.good)x.style.borderColor="var(--gold)";
+
+  if (myProfiles.length > 0 && !me) {
+    html += "<label>Reprendre ton compte sur cet appareil</label><div class='row' style='margin-bottom:10px'>";
+    myProfiles.forEach(p => {
+      html += "<button class='btn small' data-pick='" + esc(p.name) + "'>" + esc(p.name) + " (" + fmt(p.points) + " pts)</button>";
     });
-    $("#qzFb").innerHTML=(ok?"✅ Bonne réponse !":"❌ Raté, c'était : <b>"+esc(item.good)+"</b>")+" (+"+xp+" XP) "
-      +"<button class='btn small primary' id='qzNext'>Suivante ➜</button>";
-    $("#qzNext").onclick=function(){qzPlay.i++;renderQuiz();};
-  };});
-}
-function qzPlayOrder(item,body){
-  let order=item.items.map(function(_,i){return i;}).sort(function(){return Math.random()-0.5;});
-  function draw(fbHtml){
-    body.innerHTML="<h2>🔢 Classement"+(item.theme?" · "+esc(item.theme):"")+"</h2>"
-     +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
-     +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
-     +"<div style='margin-top:8px'>"+order.map(function(oi,i){
-       return "<div class='row' style='margin:4px 0'>"+(fbHtml?"<b>"+(i+1)+".</b> ":"<button class='btn small' data-up='"+i+"'"+(i===0?" disabled":"")+">▲</button><button class='btn small' data-down='"+i+"'"+(i===order.length-1?" disabled":"")+">▼</button>")+"<span style='flex:1'>"+esc(item.items[oi])+"</span></div>";
-     }).join("")+"</div>"
-     +"<div style='margin-top:8px'>"+(fbHtml||"<button class='btn primary' id='ordGo'>Valider l'ordre</button>")+"</div></div>"
-     +"<div class='mut' style='margin-top:8px'>Question "+(qzPlay.i+1)+"/"+qzPlay.list.length+" · session "+qzPlay.pts+" XP</div>";
-    if(!fbHtml){
-      body.querySelectorAll("[data-up]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.up,10);const t=order[i];order[i]=order[i-1];order[i-1]=t;draw();};});
-      body.querySelectorAll("[data-down]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.down,10);const t=order[i];order[i]=order[i+1];order[i+1]=t;draw();};});
-      $("#ordGo").onclick=check;
-    }
+    html += "</div>";
   }
-  function check(){
-    const exact=order.every(function(oi,i){return oi===i;});
-    const q2=P().qz, first=!q2.answered[item.id], dst=qzDaySt(P());
-    q2.answered[item.id]=exact?1:2; q2.n++; if(exact)q2.ok++;
-    dst.n++; if(exact)dst.okQuiz++;
-    const xp=exact?(first?20:4):(first?5:0);
-    qzPlay.pts+=xp; qzXP(P(),xp);
-    const corr="Ordre correct : "+item.items.map(function(x){return esc(x);}).join(" → ");
-    draw((exact?"✅ Ordre parfait ! (+"+xp+" XP)":"❌ Raté ("+xp+" XP). "+corr)
-      +" <button class='btn small primary' id='qzNext'>Suivante ➜</button>");
-    $("#qzNext").onclick=function(){qzPlay.i++;renderQuiz();};
+
+  html += "<label>Créer un nouveau pseudo unique</label>"
+    + "<div class='row'><input id='newName' maxlength='22' placeholder='Ton pseudo unique…'/>"
+    + "<button class='btn primary' id='addName'>Créer</button></div>";
+
+  if (profiles.length > 0) {
+    html += "<div style='margin-top:14px'><div class='mut'>Joueurs inscrits en ligne (" + profiles.length + ") :</div>"
+      + "<div class='mut' style='font-size:.78rem;margin-top:4px'>" + profiles.map(p => esc(p.name)).join(" · ") + "</div></div>";
   }
-  draw();
-}
-function qzPlayClassement(item,body){
-  let order=item.items.map(function(_,i){return i;}).sort(function(){return Math.random()-0.5;});
-  function draw(fbHtml,fbAfter){
-    body.innerHTML="<h2>🥇 Classement entre nous</h2>"
-     +"<div class='card' style='margin-top:10px'><b>"+esc(item.q)+"</b>"
-     +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
-     +"<div style='margin-top:8px'>"+order.map(function(oi,i){
-       return "<div class='row' style='margin:4px 0'>"+(fbHtml?"<b>"+(i+1)+".</b> ":"<button class='btn small' data-cup='"+i+"'"+(i===0?" disabled":"")+">▲</button><button class='btn small' data-cdown='"+i+"'"+(i===order.length-1?" disabled":"")+">▼</button>")+"<span style='flex:1'>"+esc(item.items[oi])+"</span></div>";
-     }).join("")+"</div>"
-     +"<div id='clsFb' style='margin-top:8px'>"+(fbHtml||"")+"</div>"
-     +(fbHtml?"":"<button class='btn primary' id='clsGo' style='margin-top:8px'>Valider mon classement</button>")+"</div>";
-    if(!fbHtml){
-      body.querySelectorAll("[data-cup]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.cup,10);const t=order[i];order[i]=order[i-1];order[i-1]=t;draw();};});
-      body.querySelectorAll("[data-cdown]").forEach(function(b){b.onclick=function(){const i=parseInt(b.dataset.cdown,10);const t=order[i];order[i]=order[i+1];order[i+1]=t;draw();};});
-      $("#clsGo").onclick=submit;
-    }
-    if(fbAfter)fbAfter();
+
+  if (!force) {
+    html += "<div style='margin-top:14px;text-align:right'><button class='btn small' id='closeModal'>Fermer</button></div>";
   }
-  function submit(){
-    const q2=P().qz; q2.rank=q2.rank||{};
-    const first=q2.rank[item.id]===undefined;
-    q2.rank[item.id]=order.slice(); q2.n++;
-    qzDaySt(P()).n++;
-    if(first)qzXP(P(),10); else saveCloud();
-    const lines=[];
-    Object.keys(dbState.profiles).forEach(function(n){
-      if(n===currentUsername)return;
-      const oq=dbState.profiles[n].qz;
-      if(oq&&oq.rank&&oq.rank[item.id]!==undefined){
-        const b=oq.rank[item.id]; let pairs=0,con=0;
-        for(let i=0;i<order.length;i++)for(let j=i+1;j<order.length;j++){
-          pairs++; if(b.indexOf(order[i])<b.indexOf(order[j]))con++;
-        }
-        lines.push("🤝 "+esc(n)+" : "+Math.round(con/pairs*100)+" % d'accord avec toi");
-      }
-    });
-    let fbHtml="🗳️ Classement noté"+(first?" (+10 XP)":"")+".";
-    if(lines.length)fbHtml+="<br>"+lines.join("<br>");
-    else fbHtml+="<br>Les autres profils pourront comparer leur classement au tien !";
-    fbHtml+=" <button class='btn small primary' id='clsNext'>Autre ➜</button>";
-    draw(fbHtml,function(){$("#clsNext").onclick=function(){renderQuiz();};});
-  }
-  draw();
-}
-function qzRenderDil(body){
-  const dils=qzDilAll(), cls=qzClsAll();
-  const pool=dils.map(function(d){return {kind:"dil",it:d};}).concat(cls.map(function(c){return {kind:"cls",it:c};}));
-  const pick=pool[Math.floor(Math.random()*pool.length)];
-  if(pick.kind==="cls"){qzPlayClassement(pick.it,body);return;}
-  const item=pick.it, q=P().qz, first=q.dil[item.id]===undefined;
-  body.innerHTML="<h2>🤔 Dilemmes</h2>"
-   +"<div class='card' style='margin-top:10px'><b>"+(item.q?esc(item.q):"Tu préfères…")+"</b>"
-   +(item.by?"<div class='mut'>créé par "+esc(item.by)+"</div>":"")
-   +"<div style='margin-top:8px'>"+item.opts.map(function(o,i){return "<button class='btn small' style='display:block;width:100%;margin:4px 0' data-da='"+i+"'>"+esc(o)+"</button>";}).join("")+"</div>"
-   +"<div id='qzDilFb' style='margin-top:8px'></div></div>"
-   +"<div class='mut' style='margin-top:8px'>"+(first?"+10 XP pour ton premier vote sur ce dilemme":"déjà voté (tu peux changer d'avis, sans XP)")+"</div>";
-  body.querySelectorAll("[data-da]").forEach(function(b){b.onclick=function(){
-    const c=parseInt(b.dataset.da,10), q2=P().qz, first2=q2.dil[item.id]===undefined, dst=qzDaySt(P());
-    q2.dil[item.id]=c; dst.n++;
-    if(first2)qzXP(P(),10); else saveCloud();
-    const counts=item.opts.map(function(_,i){
-      let n=0;
-      Object.keys(dbState.profiles).forEach(function(pn){const oq=dbState.profiles[pn].qz;if(oq&&oq.dil[item.id]===i)n++;});
-      return n;
-    });
-    let html="🗳️ Vote noté"+(first2?" (+10 XP)":"")+". 📊 Groupe : "
-      +counts.map(function(n,i){return n+" pour « "+esc(item.opts[i])+" »";}).join(", ")+". ";
-    let twin=null;
-    Object.keys(dbState.profiles).forEach(function(n){
-      if(n!==currentUsername){const oq=dbState.profiles[n].qz;if(oq&&oq.dil[item.id]===c)twin=n;}
-    });
-    if(twin)html+="🎭 "+esc(twin)+" a choisi pareil que toi !";
-    $("#qzDilFb").innerHTML=html+" <button class='btn small primary' id='qzDilNext'>Autre ➜</button>";
-    $("#qzDilNext").onclick=function(){renderQuiz();};
-  };});
-}
-function qzRenderCreate(body){
-  body.innerHTML="<h2>✨ Créer une question en ligne</h2>"
-   +"<div class='card' style='margin-top:10px'>"
-   +"<label>Type</label><select id='qzType'>"
-   +"<option value='quiz'>🧠 Quiz (bonne réponse)</option>"
-   +"<option value='dil'>🤔 Dilemme (autant de choix que tu veux)</option>"
-   +"<option value='ordre'>🔢 Classement à remettre dans l'ordre</option>"
-   +"<option value='classement'>🥇 Sondage de classement (qui préfère quoi)</option>"
-   +"</select>"
-   +"<div id='qzForm'></div>"
-   +"<button class='btn primary' id='qzSave' style='margin-top:10px'>💾 Publier en ligne (+25 XP)</button></div>"
-   +"<div class='mut' style='margin-top:8px'>Tes créations sont partagées en ligne avec tous les joueurs.</div>";
-  function form(){
-    const t=$("#qzType").value;
-    if(t==="quiz"){
-      $("#qzForm").innerHTML="<label>Question</label><input id='qzQ' placeholder='Ex : Quelle est la capitale du Japon ?'/>"
-       +"<label>Bonne réponse</label><input id='qzG' placeholder='Tokyo'/>"
-       +"<label>Mauvaises réponses (séparées par un point-virgule)</label><input id='qzB' placeholder='Osaka;Kyoto;Nagoya'/>"
-       +"<label>Thème (facultatif)</label><input id='qzT' placeholder='Géographie'/>";
-    } else if(t==="dil"){
-      $("#qzForm").innerHTML="<label>Question (facultatif)</label><input id='qzQ' placeholder='Ex : Tu préfères quoi ?'/>"
-       +"<label>Les choix (séparés par un point-virgule)</label><input id='qzC' placeholder='Bras en mousse;Jambes en mousse'/>";
-    } else if(t==="ordre"){
-      $("#qzForm").innerHTML="<label>Consigne</label><input id='qzQ' placeholder='Ex : Classe du plus petit au plus grand'/>"
-       +"<label>Les éléments DANS LE BON ORDRE (séparés par un point-virgule)</label><input id='qzC' placeholder='Souris;Chat;Cheval;Éléphant'/>";
-    } else {
-      $("#qzForm").innerHTML="<label>Consigne</label><input id='qzQ' placeholder='Ex : Classe tes plats préférés'/>"
-       +"<label>Les éléments (séparés par un point-virgule)</label><input id='qzC' placeholder='Pizza;Burger;Sushi;Tacos'/>";
-    }
-  }
-  form(); $("#qzType").onchange=form;
-  $("#qzSave").onclick=function(){
-    const t=$("#qzType").value;
-    if(t==="quiz"){
-      const qq=$("#qzQ").value.trim(), g=$("#qzG").value.trim(),
-            bads=$("#qzB").value.split(";").map(function(s){return s.trim();}).filter(Boolean),
-            th=$("#qzT").value.trim()||"Perso";
-      if(!qq||!g||bads.length<1){toast("Il faut une question, une bonne réponse et au moins 1 mauvaise !");return;}
-      qzUser().push({id:"user-"+Date.now(),type:"quiz",q:qq,good:g,bads:bads,theme:th,by:currentUsername});
-    } else {
-      const qq=($("#qzQ").value||"").trim(), items=$("#qzC").value.split(";").map(function(s){return s.trim();}).filter(Boolean);
-      if(items.length<2||items.length>6){toast("Il faut entre 2 et 6 éléments !");return;}
-      if(t!=="dil"&&!qq){toast("Il faut une consigne !");return;}
-      if(t==="dil")qzUser().push({id:"userd-"+Date.now(),type:"dil",opts:items,q:qq,by:currentUsername});
-      else if(t==="ordre")qzUser().push({id:"usero-"+Date.now(),type:"ordre",q:qq,items:items,by:currentUsername});
-      else qzUser().push({id:"userc-"+Date.now(),type:"classement",q:qq,items:items,by:currentUsername});
-    }
-    const p=P(), q=p.qz, dst=qzDaySt(p);
-    q.created++; q.n++; dst.created++;
-    qzXP(p,25);
-    toast("✨ Publié en ligne ! +25 XP");
-    saveCloud(); renderQuiz();
-  };
-}
-function qzRenderMissions(body){
-  const p=P(), st=qzDaySt(p), q=p.qz;
-  const missions=[
-   {id:"m1",txt:"Répondre à 5 questions aujourd'hui",goal:5,xp:50,prog:function(){return st.n;}},
-   {id:"m2",txt:"Réussir 3 quiz aujourd'hui",goal:3,xp:50,prog:function(){return st.okQuiz;}},
-   {id:"m3",txt:"Créer 1 question aujourd'hui",goal:1,xp:75,prog:function(){return st.created;}}
-  ];
-  let html="<h2>🎯 Missions du jour</h2>";
-  missions.forEach(function(m){
-    if(!st[m.id]&&m.prog()>=m.goal){st[m.id]=true;qzXP(p,m.xp);toast("🎯 Mission accomplie : +"+m.xp+" XP !");}
-    const done=!!st[m.id], pc=Math.min(100,Math.round(Math.min(m.prog(),m.goal)/m.goal*100));
-    html+="<div class='card' style='margin-top:8px'><div class='row'><span>"+(done?"✅ ":"⬜ ")+m.txt+"</span><span class='spacer'></span><b>+"+m.xp+" XP</b></div>"
-     +"<div class='timer' style='margin-top:6px'><div style='width:"+pc+"%;background:linear-gradient(90deg,#34d399,#22d3ee)'></div></div>"
-     +"<div class='mut' style='margin-top:4px'>"+Math.min(m.prog(),m.goal)+" / "+m.goal+"</div></div>";
-  });
-  const g=gradeFor(q.pts);
-  html+="<h2 style='margin-top:16px'>🏅 Ton grade : "+g.ico+" "+g.n+" ("+q.pts+" XP)</h2>"
-   +"<div class='mut'>"+GRADES.map(function(x){return (q.pts>=x.xp?"✅":"⬜")+" "+x.ico+" "+x.n;}).join(" · ")+"</div>";
-  const rank=Object.keys(dbState.profiles).map(function(n){return {n:n,pts:(dbState.profiles[n].qz&&dbState.profiles[n].qz.pts)||0};}).sort(function(a,b){return b.pts-a.pts;});
-  html+="<h2 style='margin-top:16px'>🏆 Classement TerraQuiz en ligne</h2><div class='mut'>"+rank.map(function(r,i){return (i+1)+". "+esc(r.n)+" — "+r.pts+" XP";}).join("<br>")+"</div>";
-  const aff=qzAffinity();
-  if(aff.length)html+="<h2 style='margin-top:16px'>🎭 Affinités dilemmes</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % de réponses pareilles";}).join("<br>")+"</div>";
-  body.innerHTML=html;
-}
-function qzRenderStats(body){
-  const all=qzDilAll(), votes={};
-  Object.keys(dbState.profiles).forEach(function(n){
-    const oq=dbState.profiles[n].qz; if(!oq)return;
-    Object.keys(oq.dil).forEach(function(id){
-      const item=all.filter(function(x){return x.id===id;})[0]; if(!item)return;
-      const v=votes[id]=votes[id]||{opts:item.opts,c:item.opts.map(function(){return 0;})};
-      if(oq.dil[id]>=0&&oq.dil[id]<v.opts.length)v.c[oq.dil[id]]++;
-    });
-  });
-  const rows=Object.keys(votes).map(function(id){
-    const v=votes[id], t=v.c.reduce(function(a,b){return a+b;},0);
-    const imax=v.c.indexOf(Math.max.apply(null,v.c));
-    return {v:v,t:t,imax:imax,pmaj:Math.round(Math.max.apply(null,v.c)/t*100)};
-  }).sort(function(x,y){return y.pmaj-x.pmaj;});
-  let html="<h2>📊 Stats dilemmes en ligne</h2>";
-  if(!rows.length)html+="<p class='mut'>Votez sur des dilemmes et les stats du groupe apparaîtront ici !</p>";
-  if(rows.length){
-    html+="<div class='card' style='margin-top:10px'><b>🧠 Pensée majoritaire du groupe</b><div class='mut' style='margin-top:6px'>"
-     +rows.slice(0,5).map(function(r){return "• "+esc(r.v.opts[r.imax])+" ("+r.pmaj+" % du groupe)";}).join("<br>")+"</div></div>";
-    const clash=rows.slice().sort(function(x,y){return x.pmaj-y.pmaj;}).filter(function(r){return r.t>=2;}).slice(0,5);
-    if(clash.length)html+="<div class='card' style='margin-top:10px'><b>⚔️ Ce qui vous divise</b><div class='mut' style='margin-top:6px'>"
-     +clash.map(function(r){return "• "+esc(r.v.opts.join(" vs "))+" ("+r.v.c.map(function(c){return Math.round(c/r.t*100)+" %";}).join(" / ")+")";}).join("<br>")+"</div></div>";
-  }
-  const aff=qzAffinity();
-  if(aff.length)html+="<h2 style='margin-top:16px'>🤝 Qui est d'accord avec qui</h2><div class='mut'>"+aff.map(function(a){return esc(a.n)+" : "+a.p+" % d'accord avec toi";}).join("<br>")+"</div>";
-  const q=P().qz, prec=q.n?Math.round(q.ok/q.n*100):0;
-  html+="<h2 style='margin-top:16px'>🧠 Tes stats quiz</h2><div class='mut'>Répondu : "+q.n+" · Bonnes réponses : "+q.ok+" ("+prec+" %) · Questions créées : "+q.created+"</div>";
-  body.innerHTML=html;
-}
 
-/* ================= NAVIGATION ================= */
-function show(id){
-  document.querySelectorAll(".screen").forEach(function(s){s.classList.remove("active");});
-  $("#screen-"+id).classList.add("active");
-  window.scrollTo(0,0);
-  if(map&&id==="game")setTimeout(function(){map.invalidateSize();},50);
-  if(cmap&&id==="create")setTimeout(function(){cmap.invalidateSize();},50);
-  if(id==="home")renderHome();
-  if(id==="challenges")renderChallenges();
-  if(id==="board")renderBoard(currentTab);
-  if(id==="ach")renderAch();
-  if(id==="stats")renderStats();
-  if(id==="hist")renderHist();
-  if(id==="quiz")renderQuiz();
-}
-document.addEventListener("click",function(e){
-  const b=e.target.closest("[data-go]"); if(b){stopTimers();show(b.dataset.go);}
-});
-$("#homeBtn").onclick=function(){stopTimers();show("home");};
-
-/* ================= CARTE ================= */
-let map=null,cmap=null;
-const BASES={
-  osm:function(){return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"});},
-  relief:function(){return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}",{maxZoom:13,attribution:"© Esri"});},
-  sat:function(){return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"© Esri World Imagery"});},
-  topo:function(){return L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,subdomains:"abc",attribution:"© OpenTopoMap (CC-BY-SA)"});}
-};
-let curBase=null;
-function setBase(name){
-  if(!map)return;
-  if(curBase)map.removeLayer(curBase);
-  curBase=BASES[name]();curBase.addTo(map);
-}
-function initMap(){
-  if(map||typeof L==="undefined")return;
-  map=L.map("map",{worldCopyJump:true,zoomControl:true}).setView([20,0],2);
-  setBase("osm");
-  map.on("zoomend",function(){if(game&&map.getZoom()>(game.maxZoom||0))game.maxZoom=map.getZoom();});
-  loadBorders();
-  map.on("click",function(e){
-    if(!game||!$("#feedback").classList.contains("hidden"))return;
-    game.pin=e.latlng;
-    if(game.pinMarker)map.removeLayer(game.pinMarker);
-    game.pinMarker=L.circleMarker(e.latlng,{radius:8,color:"#22d3ee",fillColor:"#22d3ee",fillOpacity:.9,weight:3}).addTo(map);
-    $("#guessBtn").disabled=false;
-  });
-}
-
-/* ================= MOTEUR DE JEU ================= */
-let game=null,timerInt=null;
-function stopTimers(){if(timerInt){clearInterval(timerInt);timerInt=null;}if(hdTimer)stopHdTimer();if(friseTimer)stopFriseTimer();}
-function markOf(prec,answered){if(!answered)return "⚫";if(prec>=.9)return "🟢";if(prec>=.6)return "🟡";if(prec>0)return "🟠";return "🔴";}
-
-function buildDaily(){
-  const dk=todayKey();
-  const rng=mulberry32(hashCode("terrapin-"+dk));
-  const pattern=[1,2,2,3,4];
-  const used=new Set(),out=[];
-  pattern.forEach(function(d){
-    let cand=POOL.filter(function(q){return q.diff===d&&!used.has(q.id);});
-    if(!cand.length)cand=POOL.filter(function(q){return Math.abs(q.diff-d)<=1&&!used.has(q.id);});
-    const q=cand[Math.floor(rng()*cand.length)];
-    used.add(q.id);out.push(q);
-  });
-  return out;
-}
-
-function startGame(questions,mode,meta){
-  initMap(); if(!map)return;
-  game={mode:mode,questions:questions,i:0,results:[],combo:0,hintUsed:false,pin:null,
-    challengeId:(meta&&meta.challengeId)||null,sessionPts:0,startTime:Date.now()};
-  $("#feedback").classList.add("hidden");
-  show("game"); loadQuestion();
-}
-function loadQuestion(){
-  stopTimers();
-  const q=game.questions[game.i], cfg=DIFF[q.diff];
-  game.pin=null; game.hintUsed=false; game.maxZoom=cfg.zoom[0]; game.zoomBase=cfg.zoom[0];
-  setBase(cfg.base);
-  map.setMinZoom(cfg.zoom[0]); map.setMaxZoom(cfg.zoom[1]);
-  map.setView([20,0],cfg.zoom[0]);
-  if(game.layerGroup)map.removeLayer(game.layerGroup);
-  game.layerGroup=L.layerGroup().addTo(map);
-  $("#qPrompt").textContent=q.prompt;
-  if(q.flag){$("#qFlag").src="https://flagcdn.com/w160/"+q.flag+".png";$("#qFlag").classList.remove("hidden");}
-  else if(q.wiki){
-    $("#qFlag").classList.remove("hidden"); $("#qFlag").removeAttribute("src");
-    wikiThumb(q.wiki).then(function(s){if(s&&game&&game.questions[game.i]===q)$("#qFlag").src=s;});
-  }
-  else $("#qFlag").classList.add("hidden");
-  $("#qCat").textContent=CATS[q.cat]||q.cat;
-  $("#qDiff").textContent="●".repeat(q.diff)+"○".repeat(4-q.diff);
-  $("#qDiff").className="tag d"+q.diff;
-  $("#qNum").textContent=(game.mode==="daily"?"Q"+(game.i+1)+"/5":(game.mode==="challenge"?"Défi":"Entraînement"));
-  $("#qSession").textContent="Session : "+fmt(game.sessionPts)+" pts";
-  $("#hintBtn").disabled=!q.hint;
-  $("#hintBtn").classList.remove("hidden");
-  $("#guessBtn").disabled=true;
-  $("#feedback").classList.add("hidden");
-  game.timeLeft=cfg.timer; game.timeTotal=cfg.timer;
-  updateTimerBar();
-  timerInt=setInterval(function(){ game.timeLeft-=0.1;
-    if(game.timeLeft<=0){game.timeLeft=0;updateTimerBar();submitAnswer(true);}
-    else updateTimerBar();
-  },100);
-}
-function updateTimerBar(){
-  const f=game.timeLeft/game.timeTotal;
-  $("#timerBar").style.width=(f*100)+"%";
-  $("#timerBar").style.background=f<.2?"linear-gradient(90deg,#f87171,#ef4444)":"linear-gradient(90deg,#34d399,#22d3ee)";
-}
-$("#hintBtn").addEventListener("click",function(){
-  if(!game||!game.questions[game.i].hint||game.hintUsed)return;
-  game.hintUsed=true; $("#hintBtn").disabled=true;
-  toast("💡 "+game.questions[game.i].hint);
-});
-$("#guessBtn").addEventListener("click",function(){submitAnswer(false);});
-$("#nextBtn").addEventListener("click",nextQuestion);
-
-function computePrec(dist,tol){
-  const dmax=Math.min(3000,tol*20);
-  if(dist<=tol)return 1;
-  if(dist>=dmax)return 0;
-  return Math.max(0,1-Math.log(dist/tol)/Math.log(dmax/tol));
-}
-function multsFor(){
-  let m=1;
-  if(game.mode==="daily"&&P())m*=1+0.02*Math.min(P().streak,25);
-  m*=1+0.05*Math.min(game.combo,10);
-  if(game.hintUsed)m*=0.7;
-  if(game.zoomBase&&game.maxZoom>game.zoomBase)m*=Math.max(0.6,1-0.05*(game.maxZoom-game.zoomBase));
-  return m;
-}
-function submitAnswer(timeout){
-  stopTimers();
-  const q=game.questions[game.i], cfg=DIFF[q.diff];
-  $("#guessBtn").disabled=true;
-  const answered=!!game.pin;
-  let dist=answered?haversine({lat:game.pin.lat,lon:game.pin.lng},{lat:q.lat,lon:q.lon}):Infinity;
-  if(answered){const bd=borderDistKm(q,{lat:game.pin.lat,lng:game.pin.lng});if(bd!==null)dist=bd;}
-  const prec=answered?computePrec(dist,cfg.tol):0;
-  const m=multsFor();
-  const pts=answered?Math.round(1000*prec*(0.5+0.5*(game.timeLeft/game.timeTotal))*m):0;
-  if(prec>=.6)game.combo++;else game.combo=0;
-  const p=P();
-  if(p){
-    p.bestCombo=Math.max(p.bestCombo||0,game.combo);
-    p.stats.answered++; 
-    if(prec>=1)p.stats.perfect++;
-    if(prec>=0.6)p.stats.successCount=(p.stats.successCount||0)+1;
-    if(answered)p.stats.distSum+=dist;
-    if(q.diff===4&&answered&&dist<50)p.sharpExpert=true;
-    const bc=p.stats.byCat[q.cat]||{n:0,precSum:0,distSum:0,success:0};
-    bc.n++; bc.precSum+=prec; bc.distSum+=(answered?dist:0); if(prec>=0.6)bc.success++;
-    p.stats.byCat[q.cat]=bc;
-  }
-  game.sessionPts+=pts;
-  game.results.push({q:q,dist:answered?dist:null,prec:prec,pts:pts,mark:markOf(prec,answered),hint:game.hintUsed});
-  const g=game.layerGroup;
-  if(game.pinMarker)map.removeLayer(game.pinMarker);
-  L.circleMarker([q.lat,q.lon],{radius:9,color:"#34d399",fillColor:"#34d399",fillOpacity:.95,weight:3}).addTo(g);
-  L.circle([q.lat,q.lon],{radius:cfg.tol*1000,color:"#34d399",weight:1,dashArray:"4 6",fill:false}).addTo(g);
-  if(answered){
-    L.polyline([[game.pin.lat,game.pin.lng],[q.lat,q.lon]],{color:"#fbbf24",weight:2,dashArray:"6 8"}).addTo(g);
-    L.circleMarker([game.pin.lat,game.pin.lng],{radius:7,color:"#22d3ee",fillColor:"#22d3ee",fillOpacity:.8}).addTo(g);
-    map.fitBounds(L.latLngBounds([[game.pin.lat,game.pin.lng],[q.lat,q.lon]]),{padding:[60,60],maxZoom:cfg.zoom[1]});
-  } else map.setView([q.lat,q.lon],Math.min(cfg.zoom[1],5));
-  const label=prec>=1?"🎯 Parfait !":prec>=.9?"🔥 Presque parfait":prec>=.6?"👍 Pas mal":answered?"😅 À côté…":"💀 Sans réponse";
-  $("#fbTitle").textContent=label;
-  $("#fbPts").textContent="+"+fmt(pts)+" pts"+(game.combo>1?" · série ×"+game.combo+" 🔥":"");
-  $("#fbDist").textContent=answered?(dist===0?"Dans le pays ! · ":Math.round(dist)+" km · ")+Math.round(prec*100)+" % de précision":"Temps écoulé";
-  $("#fbFact").textContent=q.fact?"🌍 "+q.fact:"";
-  $("#nextBtn").textContent=game.i+1<game.questions.length?"Suivante ➜":"Voir les résultats 🏁";
-  $("#feedback").classList.remove("hidden");
-  $("#qSession").textContent="Session : "+fmt(game.sessionPts)+" pts";
-  beep(prec>=.6?660:220,.2);
-  checkAch();
-}
-
-function nextQuestion(){
-  game.i++;
-  if(game.i<game.questions.length)loadQuestion();
-  else finishGame();
-}
-
-function finishGame(){
-  const p=P(), total=game.sessionPts, marks=game.results.map(function(r){return r.mark;}).join("");
-  const elapsedSec=(Date.now()-(game.startTime||Date.now()))/1000;
-  if(p){
-    if(game.mode==="daily"){
-      const dk=todayKey(), si=seasonInfo();
-      const first=!(p.daily[dk]&&p.daily[dk].done);
-      if(first){
-        if(p.lastDaily===yesterdayKey())p.streak++; else if(p.lastDaily!==dk)p.streak=1;
-        p.lastDaily=dk;
-      }
-      p.daily[dk]={score:Math.max(total,(p.daily[dk]&&p.daily[dk].score)||0),marks:marks,done:true};
-      if(first){
-        p.points+=total;
-        p.seasonPts[si.n]=(p.seasonPts[si.n]||0)+total;
-        (p.seasonDays[si.n]=p.seasonDays[si.n]||[]).push(dk);
-      }
-      p.bestDaily=Math.max(p.bestDaily,p.daily[dk].score);
-    } else if(game.mode==="challenge"&&game.challengeId){
-      if(elapsedSec<10&&total>0)p.speedrun=true;
-      const ch=dbState.challenges[game.challengeId];
-      if(ch&&ch.author!==p.name&&!p.playedCh[game.challengeId]){
-        p.playedCh[game.challengeId]={score:total,rated:false};
-        p.points+=total;
-        const si=seasonInfo(); p.seasonPts[si.n]=(p.seasonPts[si.n]||0)+total;
-        ch.plays=(ch.plays||0)+1;
-        const au=dbState.profiles[ch.author];
-        if(au){au.authorPts=(au.authorPts||0)+10;au.points+=10;}
-      }
-    } else if(game.mode==="training"){
-      p.trainPts=(p.trainPts||0)+total;
-    }
-    checkAch(); saveCloud();
-  }
-  $("#resTitle").textContent=game.mode==="daily"?"🎯 Défi du jour terminé":game.mode==="challenge"?"🛠️ Défi terminé":"🏋️ Entraînement terminé";
-  $("#resScore").textContent=fmt(total)+" pts";
-  $("#resMarks").textContent=marks;
-  $("#resSub").textContent=game.mode==="daily"?(p?"Série : "+p.streak+" jour"+(p.streak>1?"s":"")+" 🔥":"")
-    :game.mode==="training"?"Entraînement : points ajoutés à ton compteur d'entraînement (hors classement saison)."
-    :"Merci d'avoir joué ce défi en ligne !";
-  $("#resDetail").innerHTML=game.results.map(function(r){
-    return "<div style='padding:8px 0;border-bottom:1px solid var(--line)'><span style='font-size:1.2rem'>"+r.mark+"</span> "+esc(r.q.prompt)
-    +" <span class='mut'>· "+(r.dist===null?"temps écoulé":r.dist===0?"dans le pays":Math.round(r.dist)+" km")+" · "+fmt(r.pts)+" pts</span></div>";
-  }).join("");
-  window._lastShare={mode:game.mode,total:total,marks:marks};
-  show("result");
-}
-
-/* ================= PARTAGE & ACCUEIL ================= */
-function fallbackCopy(txt, cb){
-  const ta=document.createElement("textarea");
-  ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0";
-  document.body.appendChild(ta); ta.select();
-  try{ document.execCommand("copy"); if(cb)cb(); }catch(e){ toast("Impossible de copier"); }
-  document.body.removeChild(ta);
-}
-
-$("#shareBtn").addEventListener("click",function(){
-  const s=window._lastShare; if(!s)return;
-  const p=P();
-  const txt="🌍 TerraPin · "+todayKey()+"\n"+(s.mode==="daily"?"Défi du jour":"Mode "+s.mode)+" · "+fmt(s.total)+" pts\n"+s.marks+(p?"\nSérie : "+p.streak+" j 🔥":"")+"\n#TerraPin";
-  const done=function(){toast("Fiche copiée ! 📋");};
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(function(){fallbackCopy(txt,done);});
-  else fallbackCopy(txt,done);
-});
-
-$("#dailyBtn").addEventListener("click",function(){
-  if(!requireProfile())return;
-  const p=P(), dk=todayKey();
-  if(p.daily[dk]&&p.daily[dk].done){
-    currentTab="day"; show("board"); renderBoard("day");
-    return;
-  }
-  startGame(buildDaily(),"daily");
-});
-
-$("#adminResetBtn").addEventListener("click",function(){
-  if(!isAdmin()){toast("Accès réservé à l'administrateur.");return;}
-  const si=seasonInfo();
-  let opts="<option value='current'>🏅 Remettre à zéro uniquement la Saison "+si.n+" (en cours)</option>"
-    +"<option value='all'>🗑️ TOUT remettre à zéro (tous les points, stats, saisons, défis)</option>";
-  for(let k=1;k<si.n;k++){
-    opts+="<option value='season_"+k+"'>📜 Archiver et remettre à zéro la Saison "+k+"</option>";
-  }
-  $("#modalBox").innerHTML="<h2>⚙️ Administration &amp; Saisons</h2>"
-    +"<p class='mut'>Action synchronisée en temps réel sur tous les postes connectés.</p>"
-    +"<label>Choisir l'action de réinitialisation</label>"
-    +"<select id='adminResetChoice'>"+opts+"</select>"
-    +"<div class='row' style='margin-top:14px'>"
-    +"<button class='btn danger' id='doResetConfirm'>Exécuter la remise à zéro</button>"
-    +"<span class='spacer'></span>"
-    +"<button class='btn' id='closeModal'>Annuler</button>"
-    +"</div>";
-  $("#modal").classList.add("open");
-
-  $("#doResetConfirm").onclick=async function(){
-    if(!isAdmin()){toast("Action non autorisée.");return;}
-    const choice = $("#adminResetChoice").value;
-    dbState.resetEpoch = Date.now(); // Signal global pour tous les clients connectés
-
-    if(choice === "all"){
-      Object.values(dbState.profiles).forEach(function(pr){
-        pr.points=0; pr.seasonPts={}; pr.seasonDays={}; pr.daily={}; pr.streak=0; pr.bestDaily=0; pr.trainPts=0;
-        pr.stats={answered:0,perfect:0,distSum:0,byCat:{},successCount:0};
-      });
-      dbState.challenges={};
-      toast("🔄 Remise à zéro complète envoyée à tous les joueurs !");
-    } else if(choice === "current"){
-      Object.values(dbState.profiles).forEach(function(pr){
-        if(pr.seasonPts) pr.seasonPts[si.n]=0;
-        if(pr.seasonDays) pr.seasonDays[si.n]=[];
-      });
-      toast("🏅 Saison " + si.n + " remise à zéro pour tous !");
-    } else if(choice.indexOf("season_") === 0){
-      const sNum = parseInt(choice.split("_")[1], 10);
-      let topP=null, topScore=-1;
-      Object.values(dbState.profiles).forEach(function(pr){
-        const pts = pr.seasonPts && pr.seasonPts[sNum] ? pr.seasonPts[sNum] : 0;
-        if(pts > topScore){topScore = pts; topP = pr.name;}
-      });
-      dbState.seasonArchives[sNum] = {winner: topP || "Personne", score: topScore > 0 ? topScore : 0, date: new Date().toLocaleDateString("fr-FR")};
-      Object.values(dbState.profiles).forEach(function(pr){
-        if(pr.seasonPts) pr.seasonPts[sNum]=0;
-        if(pr.seasonDays) pr.seasonDays[sNum]=[];
-      });
-      toast("📜 Saison " + sNum + " archivée et remise à zéro !");
-    }
-    await saveCloud(true); // Écrase proprement le document Firestore pour propager les 0
-    $("#modal").classList.remove("open");
-    renderHome();
-  };
-  $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
-});
-
-function renderHome(){
-  const p=P(), si=seasonInfo(), dk=todayKey();
-  $("#seasonChip").textContent="Saison "+si.n+" (J"+si.day+"/28)";
-  $("#homeDate").textContent="📅 "+new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
-  if(p){
-    $("#profileBtn").textContent="👤 "+p.name+(isAdmin()?" 👑":"")+" · "+fmt(p.points)+" pts";
-    $("#homeStreak").textContent="🔥 Série : "+p.streak+" j";
-    const unCount=Object.keys(p.ach||{}).length;
-    $("#achCount").textContent=unCount+" / "+ALLACH.length+" badges débloqués";
-    const done=p.daily[dk]&&p.daily[dk].done;
-    if(done){
-      $("#dailyStatus").textContent=fmt(p.daily[dk].score)+" pts · "+p.daily[dk].marks;
-      $("#dailyBtn").textContent="Voir le classement du jour ➜";
-    } else {
-      $("#dailyStatus").textContent="Prêt à jouer !";
-      $("#dailyBtn").textContent="Jouer ➜";
-    }
-  } else {
-    $("#profileBtn").textContent="👤 Connexion / Créer";
-    $("#homeStreak").textContent="🔥 Série : 0 j";
-    $("#achCount").textContent="0 / "+ALLACH.length+" badges débloqués";
-    $("#dailyStatus").textContent="Connecte-toi pour jouer";
-    $("#dailyBtn").textContent="Créer mon compte ➜";
-  }
-  const adm=$("#adminCard");
-  if(adm) adm.style.display=isAdmin()?"block":"none";
-
-  const dayPlayers=Object.values(dbState.profiles).filter(function(x){return x.daily[dk]&&x.daily[dk].done;})
-    .sort(function(a,b){return b.daily[dk].score-a.daily[dk].score;});
-  if(dayPlayers.length){
-    $("#dailyMini").innerHTML="<div class='mut'><b>🏆 Top du jour :</b> "+dayPlayers.slice(0,3).map(function(x,i){
-      return (i+1)+". "+esc(x.name)+" ("+fmt(x.daily[dk].score)+" pts)";
-    }).join(" · ")+"</div>";
-  } else {
-    $("#dailyMini").innerHTML="";
-  }
-}
-
-function levelOf(p){return Math.floor(Math.sqrt(Math.max(0,p.points)/400))+1;}
-function requireProfile(){
-  if(P())return true;
-  openProfileModal(); return false;
-}
-
-/* ================= PROFILS SÉCURISÉS (1 COMPTE PAR POSTE + PIN) ================= */
-$("#profileBtn").addEventListener("click",openProfileModal);
-function openProfileModal(){
-  const p = P();
-  const isA = isAdmin();
-  
-  let html = "<h2>👤 Mon Compte</h2>";
-  
-  if (p) {
-    html += "<div class='card' style='background:var(--card2);margin:10px 0'>"
-      + "<div class='row'><b>" + esc(p.name) + (isA ? " 👑 (Admin)" : "") + "</b><span class='spacer'></span><span class='tag'>" + fmt(p.points) + " pts</span></div>"
-      + "<div class='mut' style='margin-top:6px'>🔒 Ce compte est verrouillé sur cet appareil.</div>"
-      + "<div class='mut' style='margin-top:4px'>Code PIN de récupération : <b style='color:var(--acc)'>" + esc(p.pin || "Non défini") + "</b></div>"
-      + "<button class='btn danger small' id='logoutBtn' style='margin-top:10px'>Se déconnecter de cet appareil</button>"
-      + "</div>";
-  } else {
-    html += "<p class='mut'>Crée ton profil personnel (il sera lié à ton appareil) ou connecte-toi avec ton pseudo et ton code PIN.</p>"
-      + "<div class='card' style='background:var(--card2);margin:10px 0'>"
-      + "<b>✨ Créer un nouveau compte</b>"
-      + "<label>Pseudo</label><input id='newName' placeholder='Ton pseudo' maxlength='20'/>"
-      + "<label>Code PIN (4 chiffres, pour te reconnecter ailleurs)</label><input id='newPin' type='password' inputmode='numeric' placeholder='Ex: 1234' maxlength='4'/>"
-      + "<button class='btn primary' id='createProfile' style='margin-top:10px;width:100%'>Créer mon compte</button>"
-      + "</div>"
-      + "<div class='card' style='background:var(--card2);margin:10px 0'>"
-      + "<b>🔑 Déjà un compte ? (Connexion / Transfert)</b>"
-      + "<label>Ton pseudo existant</label><input id='loginName' placeholder='Pseudo exact' maxlength='20'/>"
-      + "<label>Ton code PIN</label><input id='loginPin' type='password' inputmode='numeric' placeholder='Code PIN' maxlength='4'/>"
-      + "<button class='btn' id='loginProfile' style='margin-top:10px;width:100%'>Récupérer mon compte</button>"
-      + "</div>";
-  }
-  
-  html += "<div class='row' style='margin-top:10px'><span class='spacer'></span><button class='btn' id='closeModal'>Fermer</button></div>";
   $("#modalBox").innerHTML = html;
   $("#modal").classList.add("open");
 
   if ($("#logoutBtn")) {
-    $("#logoutBtn").onclick = function() {
+    $("#logoutBtn").onclick = () => {
       currentUsername = null;
       localStorage.removeItem("terrapin_current_user");
       $("#modal").classList.remove("open");
       renderHome();
-      toast("Déconnecté.");
+      openProfileModal(true);
     };
   }
 
-  if ($("#createProfile")) {
-    $("#createProfile").onclick = function() {
-      const n = $("#newName").value.trim();
-      const pin = $("#newPin").value.trim();
-      if (!n) { toast("Choisis un pseudo !"); return; }
-      if (!/^\d{4}$/.test(pin)) { toast("Choisis un code PIN à 4 chiffres !"); return; }
-      if (dbState.profiles[n]) {
-        toast("Ce pseudo est déjà pris ! Utilise la connexion par PIN si c'est le tien.");
-        return;
-      }
-      newProfile(n, pin);
-      $("#modal").classList.remove("open");
-      renderHome();
-      toast("Compte créé et sécurisé, " + n + " ! 🌍");
-    };
-  }
+  $("#modalBox").querySelectorAll("[data-pick]").forEach(b => b.onclick = () => {
+    currentUsername = b.dataset.pick;
+    localStorage.setItem("terrapin_current_user", currentUsername);
+    $("#modal").classList.remove("open");
+    renderHome();
+  });
 
-  if ($("#loginProfile")) {
-    $("#loginProfile").onclick = function() {
-      const n = $("#loginName").value.trim();
-      const pin = $("#loginPin").value.trim();
-      const target = dbState.profiles[n];
-      if (!target) { toast("Compte introuvable."); return; }
-      if (target.pin && target.pin !== pin) { toast("Code PIN incorrect !"); return; }
-      
-      // Transfère la propriété du compte vers cet appareil
-      target.ownerUid = currentUid || ("local-" + Date.now());
-      if (!target.pin) target.pin = pin || "0000";
-      currentUsername = n;
-      saveCloud();
-      $("#modal").classList.remove("open");
-      renderHome();
-      toast("Bon retour, " + n + " ! 🔑");
+  $("#addName").onclick = async () => {
+    const n = ($("#newName").value || "").trim().replace(/\s+/g, " ");
+    if (!n) return;
+    const exists = Object.keys(dbState.profiles).find(k => k.toLowerCase() === n.toLowerCase());
+    if (exists) {
+      toast("❌ Ce pseudo est déjà pris par un autre joueur !");
+      return;
+    }
+    const isFirst = Object.keys(dbState.profiles).length === 0;
+    dbState.profiles[n] = {
+      name: n,
+      ownerUid: currentUid || ("local_" + Date.now()),
+      isAdmin: isFirst,
+      created: Date.now(),
+      points: 0,
+      totalPoints: 0,
+      trainingPoints: 0,
+      trainingPlays: 0,
+      trainingPerfects: 0,
+      trainingHits: 0,
+      plseCount: 0,
+      seasonWins: 0,
+      authorPts: 0,
+      plays: 0,
+      hits: 0,
+      perfects: 0,
+      bestDist: null,
+      sumDist: 0,
+      streak: 0,
+      bestStreak: 0,
+      lastDaily: null,
+      daily: {},
+      seasons: {},
+      catStats: {},
+      ach: []
     };
-  }
+    currentUsername = n;
+    localStorage.setItem("terrapin_current_user", n);
+    await saveCloud(true);
+    $("#modal").classList.remove("open");
+    renderHome();
+    toast("Bienvenue " + n + " !" + (isFirst ? " (Tu es l'Admin 👑)" : ""));
+  };
 
-  $("#closeModal").onclick = function() { $("#modal").classList.remove("open"); };
+  if ($("#closeModal")) $("#closeModal").onclick = () => $("#modal").classList.remove("open");
 }
-$("#modal").addEventListener("click",function(e){if(e.target.id==="modal")$("#modal").classList.remove("open");});
 
-/* ================= AIDE ================= */
-$("#helpBtn").addEventListener("click",function(){
-  $("#modalBox").innerHTML="<h2>❓ Comment jouer</h2><div style='font-size:.92rem;line-height:1.55'>"
-  +"<p><b>🌍 En Ligne.</b> Tes scores, défis et quiz sont synchronisés en direct avec les autres joueurs connectés via Firebase.</p>"
-  +"<p><b>👑 Admin.</b> Le premier joueur inscrit est administrateur et peut réinitialiser les classements ou archiver les saisons.</p>"
-  +"<p><b>🏆 Hall of Fame &amp; Pls.</b> Retrouve les légendes all-time et les pires performances dans l'onglet Classements.</p>"
-  +"<p><b>📊 Taux de réussite.</b> Suis ta précision par catégorie et ton taux de réussite global.</p>"
-  +"<p><b>📜 TerraChrono.</b> Frise chronologique royale en battle royale (solo ou multi sans blocage).</p>"
-  +"</div><button class='btn primary' id='closeModal' style='margin-top:10px'>Compris !</button>";
+function requireProfile() {
+  if (P()) return true;
+  openProfileModal(true);
+  return false;
+}
+
+function openAdminModal() {
+  if (!isAdmin()) { toast("Accès refusé : réservé à l'admin."); return; }
+  const si = seasonInfo();
+  $("#modalBox").innerHTML = "<h2>⚙️ Panneau Administration</h2>"
+    + "<p class='mut'>Saison actuelle : <b>Saison " + si.n + "</b> (Jour " + si.day + "/28).</p>"
+    + "<div class='card' style='background:var(--card2)'><b>🏅 Clôturer la saison et archiver le vainqueur</b>"
+    + "<p class='mut'>Enregistre le leader actuel dans les <i>Vainqueurs de Saisons</i> et remet les points saisonniers à 0.</p>"
+    + "<button class='btn gold small' id='adminCloseSeasonBtn'>🏆 Clôturer la Saison " + si.n + "</button></div>"
+    + "<div class='card' style='background:var(--card2);border-color:var(--bad)'><b>🗑️ Remise à zéro globale</b>"
+    + "<p class='mut'>Supprime tous les profils, scores, frises et défis pour repartir de zéro.</p>"
+    + "<button class='btn danger small' id='adminHardResetBtn'>⚠️ Tout remettre à zéro</button></div>"
+    + "<div style='margin-top:14px;text-align:right'><button class='btn small' id='closeAdminModal'>Fermer</button></div>";
   $("#modal").classList.add("open");
-  $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
-});
 
-/* ================= ENTRAÎNEMENT ================= */
-$("#trStart").addEventListener("click",function(){
+  $("#closeAdminModal").onclick = () => $("#modal").classList.remove("open");
+
+  $("#adminCloseSeasonBtn").onclick = async () => {
+    const profiles = getProfileList().slice().sort((a, b) => (b.points || 0) - (a.points || 0));
+    const winner = profiles[0];
+    if (winner && (winner.points || 0) > 0) {
+      dbState.seasonArchives["Saison_" + si.n + "_" + Date.now()] = {
+        season: si.n,
+        winner: winner.name,
+        points: winner.points,
+        date: todayKey()
+      };
+      winner.seasonWins = (winner.seasonWins || 0) + 1;
+    }
+    Object.values(dbState.profiles).forEach(prof => { prof.points = 0; });
+    await saveCloud(true);
+    $("#modal").classList.remove("open");
+    renderHome();
+    toast("🏆 Saison clôturée et vainqueur archivé !");
+  };
+
+  $("#adminHardResetBtn").onclick = async () => {
+    const newEpoch = (dbState.resetEpoch || 0) + 1;
+    dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {}, friseRooms: {}, resetEpoch: newEpoch };
+    currentUsername = null;
+    localStorage.removeItem("terrapin_current_user");
+    await saveCloud(true);
+    $("#modal").classList.remove("open");
+    renderHome();
+    openProfileModal(true);
+    toast("🗑️ Toutes les données ont été remises à zéro.");
+  };
+}
+
+/* ================= CARTE LEAFLET ================= */
+let map, baseLayer, gameMarkers=[];
+const TILES={
+  osm:["https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png","&copy; OpenStreetMap"],
+  relief:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}","&copy; Esri"],
+  sat:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","&copy; Esri"]
+};
+function setBase(kind){
+  if(baseLayer)map.removeLayer(baseLayer);
+  const t=TILES[kind]||TILES.osm;
+  baseLayer=L.tileLayer(t[0],{attribution:t[1],maxZoom:18,noWrap:true}).addTo(map);
+}
+function clearMarkers(){gameMarkers.forEach(m=>map.removeLayer(m));gameMarkers=[];}
+function initMap(){
+  map=L.map("map",{center:[20,0],zoom:2,minZoom:2,maxZoom:10,worldCopyJump:false,
+    maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1});
+  setBase("osm");
+  map.on("click",e=>{
+    if(!GAME||GAME.locked)return;
+    GAME.guess=e.latlng;
+    clearMarkers();
+    gameMarkers.push(L.marker(e.latlng).addTo(map));
+    $("#guessBtn").disabled=false;
+  });
+}
+
+/* ================= QUESTIONS & SCORE ================= */
+function dailyQuestions(dk){
+  const rng=mulberry32(hashCode("terrapin-"+dk));
+  const picks=[], used=new Set();
+  const plan=[[1,"pays"],[2,"capitales"],[2,"villes"],[3,null],[4,null]];
+  plan.forEach(([d,cat])=>{
+    let cands=POOL.filter(q=>!used.has(q.id)&&q.diff===d&&(!cat||q.cat===cat));
+    if(!cands.length)cands=POOL.filter(q=>!used.has(q.id));
+    const q=cands[Math.floor(rng()*cands.length)];
+    used.add(q.id); picks.push(q);
+  });
+  return picks;
+}
+function trainingQuestions(cat,diff){
+  const list=POOL.filter(q=>(cat==="all"||q.cat===cat)&&(!diff||q.diff===diff));
+  const arr=list.length?list.slice():POOL.slice();
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  return arr.slice(0,5);
+}
+function scoreQuestion(q,distKm,usedHint,timeLeft,maxTime){
+  const tol=DIFF[q.diff].tol;
+  if(distKm>tol)return {pts:0,hit:false,perfect:false,plse:distKm>2500};
+  const ratio=1-distKm/tol;
+  let pts=Math.round(1000*Math.pow(ratio,0.85));
+  const timeBonus=Math.round(250*(timeLeft/maxTime));
+  pts+=timeBonus;
+  if(usedHint)pts=Math.round(pts*0.7);
+  const perfect=distKm<tol*0.08;
+  if(perfect)pts+=150;
+  return {pts,hit:true,perfect,plse:false};
+}
+
+/* ================= MOTEUR DE PARTIE ================= */
+let GAME=null, timerInt=null;
+function stopTimer(){if(timerInt){clearInterval(timerInt);timerInt=null;}}
+function startGame(mode,questions,meta){
   if(!requireProfile())return;
-  const cat=$("#trCat").value, dv=parseInt($("#trDiff").value,10);
-  let cand=POOL.filter(function(q){return (cat==="all"||q.cat===cat)&&(dv===0||q.diff===dv);});
-  if(!cand.length)cand=POOL.slice();
-  const seq=[];let last=null;
-  for(let i=0;i<10;i++){
-    const c=cand.filter(function(q){return q!==last;});
-    const q=c[Math.floor(Math.random()*c.length)];
-    seq.push(q);last=q;
+  loadBorders();
+  GAME={mode,questions,meta:meta||{},idx:0,results:[],guess:null,locked:false,hinted:false};
+  show("game");
+  setTimeout(()=>{map.invalidateSize();loadQuestion();},60);
+}
+function loadQuestion(){
+  stopTimer();
+  const q=GAME.questions[GAME.idx];
+  const cfg=DIFF[q.diff];
+  GAME.guess=null; GAME.locked=false; GAME.hinted=false;
+  clearMarkers();
+  $("#feedback").classList.add("hidden");
+  $("#guessBtn").disabled=true;
+  $("#hintBtn").disabled=false;
+  $("#hintBtn").textContent="💡 Indice (-30%)";
+  $("#qCat").textContent=CATS[q.cat]||q.cat;
+  const dn=["","🟢 Facile","🟡 Moyen","🟠 Difficile","🔴 Expert"][q.diff];
+  const qt=$("#qDiff"); qt.textContent=dn; qt.className="tag d"+q.diff;
+  $("#qNum").textContent=(GAME.idx+1)+"/"+GAME.questions.length;
+  $("#qSession").textContent=GAME.mode==="daily"?"Défi du jour":GAME.mode==="challenge"?"Défi joueur":"Entraînement";
+  $("#qPrompt").textContent=q.prompt;
+  const fl=$("#qFlag");
+  if(q.flag){
+    fl.src="https://flagcdn.com/w320/"+q.flag+".png";
+    fl.classList.remove("hidden");
+  }else if(q.wiki){
+    fl.src="https://placehold.co/320x180/151c38/22d3ee?text="+encodeURIComponent(q.wiki);
+    fl.classList.remove("hidden");
+    fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(q.wiki))
+      .then(r=>r.json()).then(d=>{if(d&&d.thumbnail&&d.thumbnail.source&&GAME&&GAME.questions[GAME.idx]===q)fl.src=d.thumbnail.source;})
+      .catch(()=>{});
+  }else{fl.classList.add("hidden");fl.removeAttribute("src");}
+  setBase(cfg.base);
+  map.setMinZoom(cfg.zoom[0]); map.setMaxZoom(cfg.zoom[1]);
+  map.setView([20,0],2);
+  GAME.maxTime=cfg.timer; GAME.timeLeft=cfg.timer;
+  $("#timerBar").style.width="100%";
+  timerInt=setInterval(()=>{
+    GAME.timeLeft-=0.1;
+    const pct=Math.max(0,GAME.timeLeft/GAME.maxTime*100);
+    $("#timerBar").style.width=pct+"%";
+    if(GAME.timeLeft<=0){stopTimer();submitGuess(true);}
+  },100);
+}
+function useHint(){
+  const q=GAME.questions[GAME.idx];
+  if(GAME.hinted||GAME.locked)return;
+  GAME.hinted=true; $("#hintBtn").disabled=true;
+  const text=q.hint||autoHint(q);
+  toast("💡 "+text);
+  map.setMaxZoom(Math.min(12,map.getMaxZoom()+2));
+  const jit=(Math.random()-.5)*4;
+  const c=L.circle([q.lat+jit,q.lon+jit],{radius:DIFF[q.diff].tol*1800,color:"#fbbf24",fillOpacity:.06,weight:1}).addTo(map);
+  gameMarkers.push(c);
+}
+function autoHint(q){
+  const ns=q.lat>=0?"hémisphère Nord":"hémisphère Sud";
+  const ew=q.lon<-30?"Amériques":q.lon<45?"Europe / Afrique":q.lon<110?"Asie centrale / Inde":"Asie de l'Est / Océanie";
+  return "Région : "+ew+" ("+ns+")";
+}
+function submitGuess(timedOut){
+  if(GAME.locked)return;
+  stopTimer(); GAME.locked=true;
+  const q=GAME.questions[GAME.idx];
+  let dist=99999;
+  if(GAME.guess){
+    const bd=borderDistKm(q,GAME.guess);
+    dist=bd!==null?bd:haversine({lat:GAME.guess.lat,lon:GAME.guess.lng},{lat:q.lat,lon:q.lon});
   }
-  startGame(seq,"training");
-});
+  const sc=GAME.guess?scoreQuestion(q,dist,GAME.hinted,Math.max(0,GAME.timeLeft),GAME.maxTime):{pts:0,hit:false,perfect:false,plse:true};
+  GAME.results.push({q,dist:Math.round(dist),pts:sc.pts,hit:sc.hit,perfect:sc.perfect,plse:sc.plse,timedOut:!!timedOut});
+
+  map.setMaxZoom(12);
+  const target=L.circleMarker([q.lat,q.lon],{radius:9,color:"#34d399",fillColor:"#34d399",fillOpacity:.9}).addTo(map);
+  const tolRing=L.circle([q.lat,q.lon],{radius:DIFF[q.diff].tol*1000,color:"#22d3ee",fillOpacity:.05,weight:1,dashArray:"4 4"}).addTo(map);
+  gameMarkers.push(target,tolRing);
+  if(GAME.guess){
+    const line=L.polyline([[GAME.guess.lat,GAME.guess.lng],[q.lat,q.lon]],{color:"#fbbf24",weight:2,dashArray:"6 6"}).addTo(map);
+    gameMarkers.push(line);
+    map.fitBounds(L.latLngBounds([[GAME.guess.lat,GAME.guess.lng],[q.lat,q.lon]]),{padding:[60,60],maxZoom:7});
+  }else{map.setView([q.lat,q.lon],5);}
+
+  $("#fbTitle").textContent=timedOut?"⏱️ Temps écoulé !":sc.perfect?"🎯 Pile dessus !":sc.hit?"✅ Dans la zone !":sc.plse?"💀 EN PLS TOTALE !":"❌ Hors zone";
+  $("#fbPts").textContent="+"+fmt(sc.pts)+" pts";
+  $("#fbDist").textContent=GAME.guess?(dist===0?"Dans le pays !":"Distance : "+fmt(Math.round(dist))+" km (tolérance : "+DIFF[q.diff].tol+" km)"):"Aucun point placé";
+  $("#fbFact").textContent=q.fact?"💡 "+q.fact:"";
+  $("#nextBtn").textContent=GAME.idx+1<GAME.questions.length?"Suivante ➜":"Voir le résultat 🏁";
+  $("#feedback").classList.remove("hidden");
+  beep(sc.hit?(sc.perfect?880:620):200, .22);
+}
+function nextStep(){
+  if(GAME.idx+1<GAME.questions.length){GAME.idx++;loadQuestion();}
+  else finishGame();
+}
+
+/* ================= FIN DE PARTIE ================= */
+async function finishGame(){
+  const p=P(), si=seasonInfo(), dk=todayKey();
+  const total=GAME.results.reduce((s,r)=>s+r.pts,0);
+  const hits=GAME.results.filter(r=>r.hit).length;
+  const perfects=GAME.results.filter(r=>r.perfect).length;
+  const plses=GAME.results.filter(r=>r.plse).length;
+  const marks=GAME.results.map(r=>r.perfect?"🎯":r.hit?"🟩":r.plse?"💀":"🟥").join("");
+
+  if (GAME.mode === "training") {
+    p.trainingPoints = (p.trainingPoints || 0) + total;
+    p.trainingPlays = (p.trainingPlays || 0) + GAME.results.length;
+    p.trainingHits = (p.trainingHits || 0) + hits;
+    p.trainingPerfects = (p.trainingPerfects || 0) + perfects;
+  } else {
+    p.points += total;
+    p.totalPoints += total;
+    p.plays += GAME.results.length;
+    p.hits += hits;
+    p.perfects += perfects;
+    p.plseCount = (p.plseCount || 0) + plses;
+    p.seasons[si.n] = (p.seasons[si.n] || 0) + total;
+  }
+
+  GAME.results.forEach(r=>{
+    if(r.dist<90000){
+      p.sumDist+=r.dist;
+      if(p.bestDist===null||r.dist<p.bestDist)p.bestDist=r.dist;
+    }
+    const cs=p.catStats[r.q.cat]||(p.catStats[r.q.cat]={plays:0,hits:0,pts:0});
+    cs.plays++; if(r.hit)cs.hits++; cs.pts+=r.pts;
+  });
+
+  if(GAME.mode==="daily"){
+    p.daily[dk]={score:total,marks,at:Date.now()};
+    if(p.lastDaily===yesterdayKey())p.streak++;
+    else if(p.lastDaily!==dk)p.streak=1;
+    p.lastDaily=dk;
+    if(p.streak>p.bestStreak)p.bestStreak=p.streak;
+  }
+  if(GAME.mode==="challenge"&&GAME.meta.chId){
+    const ch=dbState.challenges[GAME.meta.chId];
+    if(ch){
+      ch.plays=(ch.plays||0)+1;
+      if(!ch.best||total>ch.best.score)ch.best={by:p.name,score:total};
+      const author=dbState.profiles[ch.author];
+      if(author&&author.name!==p.name){author.authorPts=(author.authorPts||0)+10;author.points+=10;author.totalPoints+=10;}
+    }
+  }
+  const newly=checkAch();
+  await saveCloud(true);
+
+  $("#resTitle").textContent=GAME.mode==="daily"?"Défi du "+dk:GAME.mode==="challenge"?"Défi : "+(GAME.meta.title||""):"Entraînement terminé";
+  $("#resScore").textContent=fmt(total)+" pts" + (GAME.mode==="training" ? " (Entraînement)" : "");
+  $("#resMarks").textContent=marks;
+  $("#resSub").textContent=hits+"/"+GAME.results.length+" dans la zone"+(perfects?" · "+perfects+" pile dessus 🎯":"")+(plses?" · "+plses+" en PLS 💀":"");
+  $("#resDetail").innerHTML=GAME.results.map((r,i)=>"<div class='row' style='padding:8px 0;border-bottom:1px solid var(--line)'>"
+    +"<span>"+(r.perfect?"🎯":r.hit?"🟩":r.plse?"💀":"🟥")+" <b>"+(i+1)+".</b> "+esc(r.q.prompt)+"</span><span class='spacer'></span>"
+    +"<span class='mut'>"+(r.dist<90000?fmt(r.dist)+" km":"—")+"</span> <b>"+fmt(r.pts)+" pts</b></div>").join("");
+  $("#shareBtn").onclick=()=>copyShare(total,marks,dk);
+  show("result");
+  if(newly.length)setTimeout(()=>toast("🎖️ Réussite : "+newly[0].title),400);
+}
+function copyShare(total,marks,dk){
+  const p=P();
+  const txt="🌍 TerraPin "+(GAME.mode==="daily"?dk:"")+"\n"+marks+" — "+fmt(total)+" pts ("+p.name+")";
+  navigator.clipboard?.writeText(txt).then(()=>toast("📋 Fiche copiée !")).catch(()=>{
+    const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();toast("📋 Fiche copiée !");
+  });
+}
+
+/* ================= RÉUSSITES ================= */
+const ACHS=[
+ {id:"first",ico:"🌱",title:"Premier pas",desc:"Terminer une première partie",test:p=>p.plays>=5},
+ {id:"hit10",ico:"🎯",title:"Bon œil",desc:"10 bonnes réponses",test:p=>p.hits>=10},
+ {id:"hit50",ico:"🦅",title:"Œil d'aigle",desc:"50 bonnes réponses",test:p=>p.hits>=50},
+ {id:"perf1",ico:"💎",title:"Dans le mille",desc:"Un tir à moins de 8 % de la tolérance",test:p=>p.perfects>=1},
+ {id:"perf10",ico:"👑",title:"Chirurgien",desc:"10 tirs parfaits",test:p=>p.perfects>=10},
+ {id:"s3",ico:"🔥",title:"Régulier",desc:"3 défis du jour d'affilée",test:p=>p.bestStreak>=3},
+ {id:"s7",ico:"⚡",title:"Accro",desc:"7 défis du jour d'affilée",test:p=>p.bestStreak>=7},
+ {id:"p5k",ico:"🏅",title:"Explorateur",desc:"5 000 points cumulés",test:p=>p.totalPoints>=5000},
+ {id:"p25k",ico:"🏆",title:"Cartographe",desc:"25 000 points cumulés",test:p=>p.totalPoints>=25000},
+ {id:"plse5",ico:"💀",title:"Habitué des PLS",desc:"Finir à plus de 2500 km de la cible 5 fois",test:p=>(p.plseCount||0)>=5},
+ {id:"crea",ico:"🛠️",title:"Architecte",desc:"Créer un défi de joueur",test:p=>Object.values(dbState.challenges).some(c=>c.author===p.name)},
+ {id:"allcat",ico:"🧭",title:"Touche-à-tout",desc:"Jouer dans au moins 6 catégories",test:p=>Object.keys(p.catStats).length>=6},
+ {id:"h1",ico:"📜",title:"Chroniqueur",desc:"Terminer une partie de Frise royale",test:p=>p.hist&&p.hist.rounds>=1},
+ {id:"hw",ico:"👑",title:"Maître du temps",desc:"Gagner une Frise royale",test:p=>p.hist&&p.hist.wins>=1},
+ {id:"hp",ico:"💎",title:"Sans-faute historique",desc:"Gagner une Frise royale sans aucune erreur",test:p=>p.hist&&p.hist.perfectWins>=1},
+ {id:"hs3",ico:"⏳",title:"Fidèle au calendrier",desc:"3 défis quotidiens histoire d'affilée",test:p=>p.hist&&p.hist.best>=3}
+];
+function checkAch(){
+  const p=P(); if(!p)return [];
+  const newly=[];
+  ACHS.forEach(a=>{if(!p.ach.includes(a.id)&&a.test(p)){p.ach.push(a.id);newly.push(a);}});
+  return newly;
+}
 
 /* ================= DÉFIS DE JOUEURS ================= */
-$("#createBtn").addEventListener("click",function(){
+let cmap, cpin=null, cmarker=null;
+function openCreator(){
   if(!requireProfile())return;
+  cpin=null;
   show("create");
-  if(!cmap&&typeof L!=="undefined"){
-    cmap=L.map("cmap",{worldCopyJump:true}).setView([20,0],2);
-    BASES.osm().addTo(cmap);
-    cmap.on("click",function(e){
-      window._cPin=e.latlng;
-      if(window._cPinM)cmap.removeLayer(window._cPinM);
-      window._cPinM=L.circleMarker(e.latlng,{radius:9,color:"#22d3ee",fillColor:"#22d3ee",fillOpacity:.9,weight:3}).addTo(cmap);
-      $("#cPin").textContent="📍 Point placé : "+e.latlng.lat.toFixed(2)+", "+e.latlng.lng.toFixed(2)+" ("+$("#cDiff").selectedOptions[0].text+")";
-    });
-  } else if(cmap){setTimeout(function(){cmap.invalidateSize();},50);}
-});
-$("#cDiff").addEventListener("change",function(){if(window._cPin)$("#cPin").textContent="📍 Point placé : "+window._cPin.lat.toFixed(2)+", "+window._cPin.lng.toFixed(2)+" ("+$("#cDiff").selectedOptions[0].text+")";});
-$("#saveChallenge").addEventListener("click",function(){
-  const title=$("#cTitle").value.trim(), prompt=$("#cPrompt").value.trim();
-  if(!prompt){toast("Écris la consigne !");return;}
-  if(!window._cPin){toast("Place le point sur la carte !");return;}
-  const diff=parseInt($("#cDiff").value,10);
-  const id="c"+Date.now()+Math.floor(Math.random()*999);
-  dbState.challenges[id]={id:id,title:title||prompt,prompt:prompt,cat:$("#cCat").value,diff:diff,
-    lat:window._cPin.lat,lon:window._cPin.lng,author:currentUsername,created:Date.now(),plays:0,up:0,down:0};
-  P().createdCh.push(id); saveCloud();
-  $("#cTitle").value="";$("#cPrompt").value="";$("#cHint").value="";window._cPin=null;
-  if(window._cPinM){cmap.removeLayer(window._cPinM);window._cPinM=null;}
-  $("#cPin").textContent="📍 Clique sur la carte pour placer le point.";
-  toast("Défi publié en ligne ! 🛠️");checkAch();show("challenges");
-});
-function chVisible(ch){return !(ch.down>=3&&ch.down>ch.up);}
-function renderChallenges(){
+  setTimeout(()=>{
+    if(!cmap){
+      cmap=L.map("cmap",{center:[25,10],zoom:2,minZoom:2,maxZoom:12,maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1});
+      L.tileLayer(TILES.osm[0],{attribution:TILES.osm[1],noWrap:true}).addTo(cmap);
+      cmap.on("click",e=>{
+        cpin=e.latlng;
+        if(cmarker)cmap.removeLayer(cmarker);
+        cmarker=L.marker(e.latlng).addTo(cmap);
+        $("#cPin").textContent="📍 Point placé : "+e.latlng.lat.toFixed(3)+", "+e.latlng.lng.toFixed(3);
+      });
+    }
+    cmap.invalidateSize();
+  },60);
+}
+async function saveNewChallenge(){
   const p=P();
-  if(!p){$("#chList").innerHTML="<div class='card mut'>Choisis un profil d'abord.</div>";return;}
-  const ids=Object.keys(dbState.challenges).filter(function(id){return chVisible(dbState.challenges[id]);});
-  if(!ids.length){$("#chList").innerHTML="<div class='card mut'>Aucun défi en ligne pour l'instant. Crée le premier ! 🛠️</div>";return;}
-  $("#chList").innerHTML=ids.map(function(id){
-    const c=dbState.challenges[id];
-    const mine=c.author===currentUsername, played=!!p.playedCh[id];
-    const rated=played&&p.playedCh[id].rated;
-    const score=(c.up||0)-(c.down||0);
-    return "<div class='card'><div class='row'><b>"+esc(c.title)+"</b><span class='spacer'></span>"
-      +"<span class='tag d"+c.diff+"'>"+"●".repeat(c.diff)+"</span><span class='tag'>"+(CATS[c.cat]||c.cat)+"</span></div>"
-      +"<div class='mut' style='margin:6px 0'>"+esc(c.prompt)+"</div>"
-      +"<div class='mut'>par "+esc(c.author)+" · "+(c.plays||0)+" partie"+((c.plays||0)>1?"s":"")+" · score "+score+" (👍"+(c.up||0)+" 👎"+(c.down||0)+")</div>"
-      +"<div class='row' style='margin-top:8px'>"
-      +(mine?"<span class='tag'>🛠️ Ton défi (impossible d'y jouer 😉)</span>"
-        :"<button class='btn primary small' data-play='"+id+"'>"+(played?"Rejouer (0 pt)":"Jouer ➜")+"</button>")
-      +(played&&!rated?"<button class='btn small' data-rate='"+id+":up'>👍</button><button class='btn small' data-rate='"+id+":down'>👎</button>":"")
-      +"<span class='spacer'></span><button class='btn small' data-sharech='"+id+"'>📋 Code</button></div></div>";
-  }).join("");
-  document.querySelectorAll("[data-play]").forEach(function(b){b.onclick=function(){
-    const c=dbState.challenges[b.dataset.play];
-    startGame([Object.assign({type:"point",id:"ch-"+c.id},c)],"challenge",{challengeId:c.id});
-  };});
-  document.querySelectorAll("[data-rate]").forEach(function(b){b.onclick=function(){
-    const parts=b.dataset.rate.split(":"), id=parts[0], dir=parts[1];
-    const c=dbState.challenges[id];const r=p.playedCh[id];
-    if(!r||r.rated)return;
-    c[dir]=(c[dir]||0)+1;r.rated=dir;saveCloud();renderChallenges();
-    toast(dir==="up"?"Merci pour ton vote 👍":"Vote pris en compte");
-  };});
-  document.querySelectorAll("[data-sharech]").forEach(function(b){b.onclick=function(){
-    const c=dbState.challenges[b.dataset.sharech];
-    const payload={t:c.title,p:c.prompt,cat:c.cat,d:c.diff,lat:c.lat,lon:c.lon,a:c.author};
-    const code=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-    fallbackCopy(code,function(){toast("Code du défi copié ! Envoie-le à tes potes 📋");});
-  };});
+  const title=$("#cTitle").value.trim(), prompt=$("#cPrompt").value.trim();
+  if(!title||!prompt||!cpin){toast("Titre, consigne et point sur la carte requis !");return;}
+  const id="ch-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,5);
+  dbState.challenges[id]={id,title,prompt,cat:$("#cCat").value,diff:+$("#cDiff").value,
+    hint:$("#cHint").value.trim(),lat:+cpin.lat.toFixed(4),lon:+cpin.lng.toFixed(4),author:p.name,plays:0,best:null};
+  checkAch();
+  await saveCloud(true);
+  toast("💾 Défi publié en ligne !");
+  renderChallenges(); show("challenges");
 }
-$("#importBtn").addEventListener("click",function(){
+function encodeChallenge(c){return "TP1:"+btoa(unescape(encodeURIComponent(JSON.stringify(c))));}
+async function importChallenge(){
+  if(!requireProfile())return;
+  const raw=$("#importCode").value.trim();
   try{
-    const o=JSON.parse(decodeURIComponent(escape(atob($("#importCode").value.trim()))));
-    if(!o.p||typeof o.lat!=="number")throw new Error("bad");
-    const id="c"+Date.now()+Math.floor(Math.random()*999);
-    dbState.challenges[id]={id:id,title:o.t||o.p,prompt:o.p,cat:o.cat||"villes",diff:o.d||2,lat:o.lat,lon:o.lon,author:o.a||"inconnu",created:Date.now(),plays:0,up:0,down:0};
-    saveCloud();$("#importCode").value="";toast("Défi importé ! 🎉");renderChallenges();
-  }catch(e){toast("Code invalide 🤔");}
-});
+    if(!raw.startsWith("TP1:"))throw 0;
+    const c=JSON.parse(decodeURIComponent(escape(atob(raw.slice(4)))));
+    if(!c.title||!c.prompt||typeof c.lat!=="number")throw 0;
+    c.id=c.id||"imp-"+Date.now().toString(36);
+    dbState.challenges[c.id]=c;
+    await saveCloud(true);
+    $("#importCode").value=""; toast("Défi importé !"); renderChallenges();
+  }catch(e){toast("Code invalide");}
+}
+function renderChallenges(){
+  const list=Object.values(dbState.challenges);
+  $("#chList").innerHTML=list.length?list.map(c=>"<div class='card'><div class='row'><b>"+esc(c.title)+"</b>"
+    +"<span class='tag'>"+(CATS[c.cat]||c.cat)+"</span><span class='tag d"+c.diff+"'>Niv. "+c.diff+"</span><span class='spacer'></span>"
+    +"<span class='mut'>par "+esc(c.author)+" · "+(c.plays||0)+" parties</span></div>"
+    +"<p class='mut'>"+esc(c.prompt)+"</p>"
+    +(c.best?"<div class='mut'>Record : <b>"+esc(c.best.by)+"</b> ("+fmt(c.best.score)+" pts)</div>":"")
+    +"<div class='row' style='margin-top:8px'><button class='btn primary small' data-play='"+c.id+"'>Jouer ▶</button>"
+    +"<button class='btn small' data-export='"+c.id+"'>📤 Partager le code</button></div></div>").join("")
+    :"<div class='card mut'>Aucun défi créé pour l'instant. Sois le premier à en publier un en ligne !</div>";
+  $("#chList").querySelectorAll("[data-play]").forEach(b=>b.onclick=()=>{
+    const c=dbState.challenges[b.dataset.play];
+    startGame("challenge",[{id:c.id,cat:c.cat,diff:c.diff,prompt:c.prompt,lat:c.lat,lon:c.lon,hint:c.hint}],{chId:c.id,title:c.title});
+  });
+  $("#chList").querySelectorAll("[data-export]").forEach(b=>b.onclick=()=>{
+    const code=encodeChallenge(dbState.challenges[b.dataset.export]);
+    navigator.clipboard?.writeText(code).then(()=>toast("📤 Code copié !")).catch(()=>toast("Code prêt"));
+  });
+}
 
-/* ================= CLASSEMENTS & HALL OF FAME & SHAME ================= */
-let currentTab="day";
-document.querySelectorAll(".tab").forEach(function(b){b.addEventListener("click",function(){renderBoard(b.dataset.tab);});});
-if($("#refreshBoardBtn")){
-  $("#refreshBoardBtn").addEventListener("click",function(){
-    renderBoard(currentTab);
-    toast("✅ Classement actualisé !");
-  });
+/* ================= ÉCRANS ================= */
+function show(name){
+  stopTimer();
+  stopFriseTimer();
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $("#screen-"+name).classList.add("active");
 }
-if($("#shareRoomBtn")){
-  $("#shareRoomBtn").addEventListener("click",function(){
-    const url = window.location.origin + window.location.pathname;
-    fallbackCopy(url, function(){
-      toast("🔗 Lien du jeu copié ! Envoie-le à tes amis.");
-    });
-  });
+function renderHome(){
+  const p=P(), si=seasonInfo(), dk=todayKey();
+  $("#seasonChip").textContent="Saison "+si.n+" (J"+si.day+"/28)";
+  $("#homeDate").textContent="📅 "+new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+  
+  // Alerte en direct sur l'accueil si c'est ton tour dans une Frise en ligne
+  const banner = $("#homeFriseBanner");
+  if (banner) {
+    const rooms = Object.values(dbState.friseRooms || {});
+    const myTurnRoom = p ? rooms.find(r => r.status === "playing" && r.players && r.players[r.turnIdx] === p.name && r.alive && r.alive[p.name]) : null;
+    const waitingRoom = p ? rooms.find(r => r.status === "waiting" && r.players && r.players.includes(p.name)) : null;
+    const joinableRoom = p ? rooms.find(r => r.status === "waiting" && r.players && !r.players.includes(p.name)) : null;
+    
+    if (myTurnRoom) {
+      banner.innerHTML = "<div class='card' style='background:linear-gradient(90deg,#f59e0b,#fbbf24);color:#241a02;border:none;margin-bottom:12px'>"
+        + "<div class='row'><div><b>⚔️ C'EST À TON TOUR DANS LA FRISE !</b><div style='font-size:.85rem'>Partie de " + esc(myTurnRoom.host) + " (" + myTurnRoom.players.length + " joueurs)</div></div>"
+        + "<span class='spacer'></span><button class='btn small' style='background:#081018;color:#fff;border:none' id='homeJoinTurnBtn'>Jouer mon tour ➜</button></div></div>";
+      $("#homeJoinTurnBtn").onclick = function() { activeRoomId = myTurnRoom.id; show("frise"); renderFrise(); };
+    } else if (waitingRoom) {
+      banner.innerHTML = "<div class='card' style='background:var(--card2);border-color:var(--acc);margin-bottom:12px'>"
+        + "<div class='row'><div><b>⏳ Salon Frise en attente de joueurs…</b><div class='mut'>" + waitingRoom.players.length + " joueur(s) prêt(s) : " + waitingRoom.players.map(esc).join(", ") + "</div></div>"
+        + "<span class='spacer'></span><button class='btn small primary' id='homeOpenLobbyBtn'>Ouvrir le salon ➜</button></div></div>";
+      $("#homeOpenLobbyBtn").onclick = function() { activeRoomId = waitingRoom.id; show("frise"); renderFrise(); };
+    } else if (joinableRoom) {
+      banner.innerHTML = "<div class='card' style='background:var(--card2);border-color:var(--acc2);margin-bottom:12px'>"
+        + "<div class='row'><div><b>🌐 Une Frise en ligne attend des joueurs !</b><div class='mut'>Créée par " + esc(joinableRoom.host) + " (" + joinableRoom.players.length + " joueur(s))</div></div>"
+        + "<span class='spacer'></span><button class='btn small gold' id='homeJoinLobbyBtn'>Rejoindre ➜</button></div></div>";
+      $("#homeJoinLobbyBtn").onclick = function() { joinFriseRoom(joinableRoom.id); };
+    } else {
+      banner.innerHTML = "";
+    }
+  }
+
+  if(p){
+    $("#profileBtn").textContent="👤 "+p.name+(isAdmin()?" 👑":"")+" · "+fmt(p.points)+" pts";
+    $("#homeStreak").textContent="🔥 Série : "+p.streak+" j";
+    $("#achCount").textContent=p.ach.length+" / "+ACHS.length+" débloquées";
+    $("#adminCard").style.display = isAdmin() ? "block" : "none";
+    const done=p.daily[dk];
+    if(done){
+      $("#dailyStatus").innerHTML=done.marks+" — "+fmt(done.score)+" pts";
+      $("#dailyBtn").textContent="Voir le classement du jour";
+      $("#dailyBtn").onclick=()=>{show("board");renderBoard("day");};
+    }else{
+      $("#dailyStatus").textContent="Prêt · 5 questions";
+      $("#dailyBtn").textContent="Jouer le défi du jour ➜";
+      $("#dailyBtn").onclick=()=>startGame("daily",dailyQuestions(dk));
+    }
+  }else{
+    $("#profileBtn").textContent="👤 Choisir un pseudo";
+    $("#homeStreak").textContent="🔥 Série : 0 j";
+    $("#achCount").textContent="0 / "+ACHS.length+" débloquées";
+    $("#adminCard").style.display = "none";
+    $("#dailyStatus").textContent="Crée ton compte joueur pour commencer";
+    $("#dailyBtn").textContent="Choisir mon pseudo ➜";
+    $("#dailyBtn").onclick=()=>openProfileModal(true);
+  }
+  const todayRows=getProfileList().filter(x=>x.daily&&x.daily[dk]).sort((a,b)=>b.daily[dk].score-a.daily[dk].score).slice(0,3);
+  $("#dailyMini").innerHTML=todayRows.length?"<div class='mut'>Top du jour en ligne : "+todayRows.map((x,i)=>["🥇","🥈","🥉"][i]+" <b>"+esc(x.name)+"</b> ("+fmt(x.daily[dk].score)+")").join(" · ")+"</div>":"";
 }
-function tierOf(pts){return pts>=25000?"💎 Diamant":pts>=15000?"🥇 Or":pts>=8000?"🥈 Argent":pts>=3000?"🥉 Bronze":"🌱 Aucun";}
+
+let currentTab = "season";
 function renderBoard(tab){
-  currentTab=tab||currentTab;
-  const si=seasonInfo(), dk=todayKey();
-  if($("#roomInfoTxt")){
-    $("#roomInfoTxt").textContent = "🔥 Firebase Temps Réel · " + Object.keys(dbState.profiles).length + " joueur(s) inscrit(s)";
-  }
-  $("#seasonInfo").innerHTML="Saison "+si.n+" · jour "+si.day+" / 28 · <b>"+si.left+" jour"+(si.left>1?"s":"")+"</b> restants (fin : "+si.end.toLocaleDateString("fr-FR")+")";
-  const ps=Object.values(dbState.profiles);
-  let rows=[],cols=[],title="";
-  
+  currentTab = tab || "season";
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("primary",b.dataset.tab===currentTab));
+  const si=seasonInfo(), dk=todayKey(), me=P()?.name;
+  $("#seasonInfo").textContent="Saison "+si.n+" — jour "+si.day+"/28 · "+si.left+" jours restants";
+  const profiles=getProfileList();
+  let rows=[], title="", col2="Points", col3="Détail";
+
   if(currentTab==="day"){
-    title="📅 Classement du jour";
-    rows=ps.filter(function(p){return p.daily[dk]&&p.daily[dk].done;})
-      .map(function(p){return {n:p.name,v:p.daily[dk].score,x:p.daily[dk].marks};})
-      .sort(function(a,b){return b.v-a.v;});
-    cols=["Joueur","Score","Détail"];
-  }
-  else if(currentTab==="season"){
-    title="🏅 Saison "+si.n+" (avec stats de participation)";
-    rows=ps.map(function(p){
-      const pts=p.seasonPts&&p.seasonPts[si.n]?p.seasonPts[si.n]:0;
-      const daysArr=p.seasonDays&&p.seasonDays[si.n]?p.seasonDays[si.n]:[];
-      const daysPlayed=daysArr.length;
-      const participating=pts>0||daysPlayed>0;
-      return {
-        n: p.name,
-        v: pts,
-        days: daysPlayed,
-        participating: participating,
-        x: participating ? tierOf(pts) : "⏳ Non participant"
-      };
-    }).sort(function(a,b){
-      if(a.participating!==b.participating) return b.participating - a.participating;
-      return b.v-a.v;
-    });
-    cols=["Joueur","Points saison","Jours joués","Statut / Palier"];
-  }
-  else if(currentTab==="all"){
-    title="♾️ Classement général en ligne";
-    rows=ps.map(function(p){return {n:p.name,v:p.points,x:"L"+levelOf(p)};})
-      .sort(function(a,b){return b.v-a.v;});
-    cols=["Joueur","Points","Niveau"];
-  }
-  else if(currentTab==="hof"){
-    title="🏆 Hall of Fame All-Time (Légendes)";
-    rows=ps.map(function(p){
-      const bestD=p.bestDaily||0;
-      const streak=p.streak||0;
-      return {n:p.name, v:bestD, x:"🔥 "+streak+" j de série · Max journalier : "+fmt(bestD)+" pts"};
-    }).sort(function(a,b){return b.v-a.v;});
-    cols=["Légende","Meilleur Défi Jour","Exploit & Série"];
-  }
-  else if(currentTab==="plse"){
-    title="📉 Hall of Shame (Les Pls & Égarés)";
-    rows=ps.map(function(p){
-      const s=p.stats;
-      const avg=s.answered>0?Math.round(s.distSum/s.answered):0;
-      return {n:p.name, v:avg, x:s.answered+" questions · Erreur moyenne : "+fmt(avg)+" km 😬"};
-    }).sort(function(a,b){return b.v-a.v;}); // highest avg error = biggest pls
-    cols=["Explorateur perdu","Erreur moy. (km)","Bilan de l'égarement"];
-  }
-  else if(currentTab==="archive"){
-    title="📜 Historique & Vainqueurs de Saisons";
-    const arcs=dbState.seasonArchives||{};
-    const keys=Object.keys(arcs).sort(function(a,b){return b-a;});
-    $("#boardBox").innerHTML="<h2>"+title+"</h2>"
-     +(keys.length?"<table><tr><th>Saison</th><th>Vainqueur</th><th>Score record</th><th>Date d'archivage</th></tr>"
-      +keys.map(function(k){
-        const a=arcs[k];
-        return "<tr><td><b>Saison "+k+"</b></td><td>👑 "+esc(a.winner)+"</td><td><b>"+fmt(a.score)+" pts</b></td><td class='mut'>"+esc(a.date)+"</td></tr>";
-      }).join("")+"</table>":"<p class='mut'>Aucune saison archivée pour le moment. L'admin peut archiver une saison terminée !</p>");
+    title="Classement du "+dk;
+    rows=profiles.filter(p=>p.daily&&p.daily[dk]).map(p=>({name:p.name,v:p.daily[dk].score,sub:p.daily[dk].marks})).sort((a,b)=>b.v-a.v);
+  }else if(currentTab==="season"){
+    title="Classement Saison "+si.n+" (Défi du jour + Défis joueurs)";
+    rows=profiles.map(p=>({name:p.name,v:p.points||0,sub:"🔥 "+p.streak+" j · "+(p.hits||0)+"/"+((p.plays||0))+" réussis"})).sort((a,b)=>b.v-a.v);
+  }else if(currentTab==="all"){
+    title="Classement Général (All-time)";
+    rows=profiles.map(p=>({name:p.name,v:p.totalPoints||0,sub:p.ach.length+" badges · "+(p.seasonWins||0)+" saison(s) gagnée(s)"})).sort((a,b)=>b.v-a.v);
+  }else if(currentTab==="hof"){
+    title="🏆 Hall of Fame (Taux de réussite & Précision)";
+    col2="Score Élite";
+    rows=profiles.filter(p=>(p.plays||0)>=5).map(p=>{
+      const acc = Math.round(((p.hits||0)/(p.plays||1))*100);
+      const eliteScore = Math.round((p.totalPoints||0) * (acc/100) + (p.perfects||0)*250);
+      return {name:p.name,v:eliteScore,sub:"🎯 "+acc+"% réussite · "+(p.perfects||0)+" parfaits · "+(p.bestDist!==null?p.bestDist+" km":"—")};
+    }).sort((a,b)=>b.v-a.v);
+  }else if(currentTab==="plse"){
+    title="📉 Hall of Shame — Les PLS (Tirs à +2500 km)";
+    col2="Nombre de PLS";
+    rows=profiles.filter(p=>(p.plseCount||0)>0 || (p.plays||0)>0).map(p=>{
+      const fails = (p.plays||0) - (p.hits||0);
+      return {name:p.name,v:p.plseCount||0,sub:"💀 "+(p.plseCount||0)+" PLS (+2500 km) · ❌ "+fails+" ratés au total"};
+    }).sort((a,b)=>b.v-a.v);
+  }else if(currentTab==="archive"){
+    title="📜 Archives des Vainqueurs de Saisons";
+    col2="Points";
+    const archList = Object.values(dbState.seasonArchives || {}).sort((a,b)=>b.season-a.season);
+    if(!archList.length){
+      $("#boardBox").innerHTML="<h2>"+title+"</h2><p class='mut'>Aucune saison n'a encore été clôturée. Le vainqueur de la Saison "+si.n+" apparaîtra ici !</p>";
+      return;
+    }
+    $("#boardBox").innerHTML="<h2>"+title+"</h2><table><thead><tr><th>Saison</th><th>Vainqueur</th><th>Score</th><th>Date</th></tr></thead><tbody>"
+      +archList.map(a=>"<tr><td><b>Saison "+a.season+"</b></td><td>👑 <b>"+esc(a.winner)+"</b></td><td><b>"+fmt(a.points)+"</b></td><td class='mut'>"+esc(a.date)+"</td></tr>").join("")+"</tbody></table>";
     return;
+  }else if(currentTab==="crea"){
+    title="Créateurs de défis";
+    rows=profiles.filter(p=>p.authorPts>0).map(p=>({name:p.name,v:p.authorPts,sub:"pts d'auteur"})).sort((a,b)=>b.v-a.v);
+  }else if(currentTab==="hist"){
+    title="Histoire — TerraChrono";
+    rows=profiles.filter(p=>p.hist&&p.hist.pts>0).map(p=>({name:p.name,v:p.hist.pts,sub:"👑 "+p.hist.wins+" victoires · "+p.hist.placements+" cartes"})).sort((a,b)=>b.v-a.v);
   }
-  else if(currentTab==="hist"){
-    title="📜 Classement histoire";
-    rows=ps.map(function(p){const h=ensureHist(p);return {n:p.name,v:h.pts,x:h.wins+" frise(s) gagnée(s)"};})
-      .filter(function(r){return r.v>0;}).sort(function(a,b){return b.v-a.v;});
-    cols=["Joueur","Points histoire","Titres"];
-  }
-  else {
-    title="🛠️ Meilleurs créateurs";
-    rows=ps.map(function(p){return {n:p.name,v:p.authorPts||0,x:p.createdCh.length+" défi(s)"};})
-      .filter(function(r){return r.v>0;}).sort(function(a,b){return b.v-a.v;});
-    cols=["Créateur","Pts d'auteur","Défis créés"];
-  }
-  
-  const medals=["🥇","🥈","🥉"];
-  $("#boardBox").innerHTML="<h2>"+title+"</h2>"
-   +(rows.length?"<table><tr>"+cols.map(function(c){return "<th>"+c+"</th>";}).join("")+"</tr>"
-    +rows.map(function(r,i){
-      const isMe = P()&&r.n===P().name;
-      if(currentTab==="season"){
-        return "<tr"+(isMe?" class='me'":"")+"><td>"+(i<3&&r.participating?medals[i]:(i+1)+".")+" "+esc(r.n)+"</td><td><b>"+fmt(r.v)+"</b></td><td>"+r.days+" jour"+(r.days>1?"s":"")+"</td><td class='mut'>"+esc(String(r.x))+"</td></tr>";
-      }
-      return "<tr"+(isMe?" class='me'":"")+"><td>"+(i<3?medals[i]:(i+1)+".")+" "+esc(r.n)+"</td><td><b>"+fmt(r.v)+"</b></td><td class='mut'>"+esc(String(r.x))+"</td></tr>";
-    }).join("")+"</table>"
-    :"<p class='mut'>Personne n'a encore marqué dans cette catégorie. Sois le premier !</p>");
+  $("#boardBox").innerHTML="<h2>"+title+"</h2>"+(rows.length?"<table><thead><tr><th>#</th><th>Joueur</th><th>"+col2+"</th><th>"+col3+"</th></tr></thead><tbody>"
+    +rows.map((r,i)=>"<tr class='"+(r.name===me?"me":"")+"'><td>"+(["🥇","🥈","🥉"][i]||(i+1))+"</td><td><b>"+esc(r.name)+"</b></td><td><b>"+fmt(r.v)+"</b></td><td class='mut'>"+esc(r.sub)+"</td></tr>").join("")
+    +"</tbody></table>":"<p class='mut'>Aucun score enregistré dans cette catégorie pour le moment.</p>");
 }
 
-/* ================= RÉUSSITES & STATS DÉTAILLÉES ================= */
 function renderAch(){
   const p=P();
-  $("#achList").innerHTML=ALLACH.map(function(a){
-    const un=p&&p.ach[a.id];
-    return "<div class='ach"+(un?"":" locked")+"'><div class='ico'>"+a.ico+"</div><div><b>"+a.n+"</b><div class='mut'>"+a.d+"</div>"
-    +(un?"<div class='mut' style='color:var(--good)'>✓ Débloquée</div>":"")+"</div></div>";
+  $("#achList").innerHTML=ACHS.map(a=>{
+    const ok=p&&p.ach.includes(a.id);
+    return "<div class='ach"+(ok?"":" locked")+"'><div class='ico'>"+a.ico+"</div><div><b>"+a.title+"</b><div class='mut'>"+a.desc+"</div></div><span class='spacer'></span><span>"+(ok?"✅":"🔒")+"</span></div>";
   }).join("");
 }
+
 function renderStats(){
   const p=P();
-  if(!p){$("#statsBox").innerHTML="<p class='mut'>Choisis un profil d'abord.</p>";return;}
-  const s=p.stats, avg=s.answered?Math.round(s.distSum/s.answered):0;
-  const acc=s.answered?Math.round(100*s.perfect/s.answered):0;
-  const globalSuccess=s.answered>0?Math.round(100*(s.successCount||0)/s.answered):0;
-  let html="<div class='grid'>"
-   +"<div class='card'><div class='mut'>Points</div><div class='big'>"+fmt(p.points)+"</div><div class='mut'>Niveau "+levelOf(p)+"</div><div class='lvlbar'><i style='width:"+lvlPct(p)+"%'></i></div></div>"
-   +"<div class='card'><div class='mut'>Série 🔥</div><div class='big'>"+p.streak+" j</div><div class='mut'>"+fmt(Object.keys(p.daily).length)+" défis joués</div></div>"
-   +"<div class='card'><div class='mut'>Taux de réussite global</div><div class='big'>"+globalSuccess+" %</div><div class='mut'>"+(s.successCount||0)+" / "+s.answered+" réussites (≥ 60%)</div></div>"
-   +"<div class='card'><div class='mut'>Erreur moyenne</div><div class='big'>"+fmt(avg)+" km</div><div class='mut'>Précision sans-faute : "+acc+" %</div></div>"
-   +"</div><h2>Entraînement séparé</h2><div class='card'><div class='mut'>Points d'entraînement bankés :</div><div class='big'>"+fmt(p.trainPts||0)+" pts</div><div class='mut'>Ne comptent pas dans le classement officiel de la saison.</div></div>"
-   +"<h2>Taux de réussite &amp; précision par catégorie</h2>";
-  const cats=Object.keys(CATS).filter(function(c){return s.byCat[c];});
-  html+=cats.length?cats.map(function(c){
-    const b=s.byCat[c], precM=Math.round(b.precSum/b.n*100), succM=Math.round(100*(b.success||0)/b.n), d=Math.round(b.distSum/b.n);
-    return "<div class='card' style='margin:8px 0'><div class='row'><b>"+CATS[c]+"</b><span class='spacer'></span><span class='mut'>"+b.n+" partie(s) jouée(s)</span></div>"
-     +"<div class='row' style='margin-top:6px'><span class='mut' style='width:110px'>Réussite (≥60%)</span><div class='bar'><i style='width:"+succM+"%;background:linear-gradient(90deg,#34d399,#22d3ee)'></i></div><span class='mut' style='width:45px;text-align:right'>"+succM+" %</span></div>"
-     +"<div class='row' style='margin-top:4px'><span class='mut' style='width:110px'>Précision moy.</span><div class='bar'><i style='width:"+precM+"%'></i></div><span class='mut' style='width:45px;text-align:right'>"+precM+" %</span></div>"
-     +"<div class='mut' style='margin-top:4px'>Distance moyenne d'erreur : <b>"+fmt(d)+" km</b></div></div>";
-  }).join(""):"<p class='mut'>Joue dans différentes catégories pour afficher tes taux de réussite détaillés !</p>";
-  $("#statsBox").innerHTML=html;
-}
-function lvlPct(p){
-  const l=levelOf(p),cur=400*(l-1)*(l-1),next=400*l*l;
-  return Math.min(100,Math.round((p.points-cur)/(next-cur)*100));
+  if(!p){$("#statsBox").innerHTML="<p class='mut'>Choisis un pseudo pour voir tes stats.</p>";return;}
+  const acc=p.plays?Math.round(p.hits/p.plays*100):0;
+  const trAcc=p.trainingPlays?Math.round(p.trainingHits/p.trainingPlays*100):0;
+  const avg=p.plays?Math.round(p.sumDist/p.plays):0;
+  const cats=Object.keys(CATS).map(k=>{
+    const s=p.catStats[k]||{plays:0,hits:0,pts:0};
+    const r=s.plays?Math.round(s.hits/s.plays*100):0;
+    return "<div class='row' style='margin:8px 0'><span style='width:140px'>"+CATS[k]+"</span>"
+      +"<div class='bar'><i style='width:"+r+"%'></i></div>"
+      +"<span class='mut' style='width:110px;text-align:right'><b>"+r+"%</b> ("+s.hits+"/"+s.plays+")</span></div>";
+  }).join("");
+  $("#statsBox").innerHTML=
+    "<div class='grid'>"
+    +"<div class='card'><b>🎯 Mode Classé (Saison / Défis)</b><div class='big' style='color:var(--acc)'>"+acc+"%</div><div class='mut'>Taux de réussite ("+p.hits+"/"+p.plays+" questions) · "+p.perfects+" parfaits 🎯 · "+(p.plseCount||0)+" PLS 💀</div></div>"
+    +"<div class='card'><b>🏋️ Mode Entraînement</b><div class='big' style='color:var(--acc2)'>"+trAcc+"%</div><div class='mut'>Taux de réussite ("+(p.trainingHits||0)+"/"+(p.trainingPlays||0)+" questions) · "+fmt(p.trainingPoints||0)+" pts hors-saison</div></div>"
+    +"</div>"
+    +"<div class='grid'>"
+    +"<div class='card'><div class='mut'>Points Saison / Général</div><div class='big'>"+fmt(p.points)+" / "+fmt(p.totalPoints)+"</div></div>"
+    +"<div class='card'><div class='mut'>Meilleur tir / Erreur moy.</div><div class='big'>"+(p.bestDist!==null?fmt(p.bestDist)+" km":"—")+" / "+fmt(avg)+" km</div></div>"
+    +"</div><h2>Taux de réussite par catégorie</h2>"+cats;
 }
 
-/* ================= WIKIPÉDIA : DECK HISTOIRE ================= */
-const WIKI_BASE="https://api.wikimedia.org/feed/v1/wikipedia/fr/onthisday/";
-let WDECK=null;
-function wikiCache(){try{return JSON.parse(localStorage.getItem("terrapin_wiki_v1"))||{days:{}};}catch(e){return {days:{}};}}
-function wikiSave(db){try{localStorage.setItem("terrapin_wiki_v1",JSON.stringify(db));}catch(e){}}
-function stripYears(s){
-  return s.replace(/,?\s*\d{1,2}(?:er)?\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)(?:\s+\d{3,4})?/gi,"")
-          .replace(/\((?:en\s+)?-?\d{3,4}(?:\s*av\.\s*J\.-C\.)?\)/gi,"")
-          .replace(/\b\d{3,4}\s*(?:av\.\s*)?J\.-C\./gi,"")
-          .replace(/\b(1[0-9]{3}|20[0-2][0-9])\b/g,"")
-          .replace(/\s{2,}/g," ").replace(/^[\s,;:-]+/,"").trim();
-}
-function wikiToCard(it){
-  if(!it||typeof it.year!=="number")return null;
-  if(it.year<-800||it.year>2026)return null;
-  const raw=(it.text||"").trim();
-  if(raw.length<45||raw.length>260)return null;
-  const x=stripYears(raw);
-  if(x.length<40)return null;
-  const t=x.length>90?x.slice(0,88).replace(/[,;:\s]\S*$/,"")+"…":x;
-  return {y:it.year,t:t,x:x};
-}
-async function fetchWikiDay(m,d){
-  const key=(m<10?"0":"")+m+"-"+(d<10?"0":"")+d;
-  const db=wikiCache();
-  if(db.days[key])return db.days[key];
-  try{
-    const ctrl=(typeof AbortController!=="undefined")?new AbortController():null;
-    const to=ctrl?setTimeout(function(){ctrl.abort();},8000):null;
-    const r=await fetch(WIKI_BASE+"all/"+key,ctrl?{signal:ctrl.signal}:undefined);
-    if(to)clearTimeout(to);
-    if(!r.ok)return null;
-    const j=await r.json();
-    const items=[].concat(j.selected||[],j.events||[]);
-    const cards=[];
-    items.forEach(function(it){const c=wikiToCard(it);if(c)cards.push(c);});
-    if(!cards.length)return null;
-    db.days[key]=cards; wikiSave(db);
-    return cards;
-  }catch(e){return null;}
-}
-function flattenWiki(){
-  const db=wikiCache(), seen={}, out=[];
-  Object.keys(db.days).forEach(function(k){(db.days[k]||[]).forEach(function(c){
-    if(!seen[c.t]){seen[c.t]=1;c.i=out.length;out.push(c);}
-  });});
-  return out;
-}
-function ensureWikiDeck(statusCb){
-  return new Promise(function(res){
-    if(WDECK&&WDECK.length>=60){res(WDECK);return;}
-    if(flattenWiki().length>=220){WDECK=flattenWiki();res(WDECK);return;}
-    let done=0; const target=40; let settled=false;
-    function finish(){if(settled)return;settled=true;WDECK=flattenWiki();if(WDECK.length<60)WDECK=null;res(WDECK||EVENTS);}
-    setTimeout(finish,9000);
-    for(let k=0;k<target;k++){
-      const m=1+Math.floor(Math.random()*12), d=1+Math.floor(Math.random()*28);
-      fetchWikiDay(m,d).then(function(){done++;if(statusCb)statusCb(done,target);
-        if(done>=target)finish();});
-    }
-  });
-}
-function DECK(){return (WDECK&&WDECK.length>=60)?WDECK:EVENTS;}
-async function wikiThumb(title){
-  const db=wikiCache(); db.imgs=db.imgs||{};
-  if(db.imgs[title])return db.imgs[title];
-  try{
-    const ctrl=(typeof AbortController!=="undefined")?new AbortController():null;
-    const to=ctrl?setTimeout(function(){ctrl.abort();},8000):null;
-    const r=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title),ctrl?{signal:ctrl.signal}:undefined);
-    if(to)clearTimeout(to);
-    if(!r.ok)return null;
-    const j=await r.json();
-    const src=(j.originalimage&&j.originalimage.source)||(j.thumbnail&&j.thumbnail.source);
-    if(src){db.imgs[title]=src;wikiSave(db);}
-    return src||null;
-  }catch(e){return null;}
-}
-async function loadEphem(){
-  const d=new Date(), m=d.getMonth()+1, day=d.getDate();
-  const cards=await fetchWikiDay(m,day);
-  let html="";
-  if(cards&&cards.length){
-    const top=cards.slice().sort(function(a,b){return b.y-a.y;}).slice(0,6);
-    html="<b>📅 C'est arrivé un "+d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})+" :</b><br>"
-      +top.map(function(c){return "• <b>"+esc(c.t)+"</b> ("+fmtYear(c.y)+")";}).join("<br>");
-  } else {
-    const evs=EPHEM.filter(function(e){return e.m===m&&e.d===day;});
-    if(evs.length){
-      html="<b>📅 C'est arrivé un "+d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})+" :</b><br>"+evs.map(function(e){return "• "+e.t;}).join("<br>");
-    } else {
-      const a=EVENTS[Math.floor(Math.random()*EVENTS.length)], b=EVENTS[Math.floor(Math.random()*EVENTS.length)];
-      html="<b>📅 En route dans l'histoire :</b><br>• <b>"+esc(a.t)+"</b> — "+esc(a.x)+"<br>• <b>"+esc(b.t)+"</b> — "+esc(b.x);
-    }
-  }
-  $("#ephemBox").innerHTML=html;
+function openHelp(){
+  $("#modalBox").innerHTML="<h2>❓ Comment jouer</h2>"
+    +"<p class='mut'>• <b>Compte unique en ligne :</b> ton pseudo est protégé par ton appareil et synchronisé en temps réel sur Firebase.</p>"
+    +"<p class='mut'>• <b>Défi du jour :</b> 5 questions identiques pour tous les joueurs chaque jour, avec zoom limité et temps compté. Compte pour le classement de la saison.</p>"
+    +"<p class='mut'>• <b>Entraînement :</b> libre et illimité, mais les points ne comptent pas dans le classement de la saison.</p>"
+    +"<p class='mut'>• <b>Score Géo :</b> jusqu'à 1 000 pts selon ta précision, +250 pts bonus rapidité, +150 pts si tu es pile dessus. Indice : -30 %. Plus de 2500 km = une PLS 💀 !</p>"
+    +"<p class='mut'>• <b>Frise royale (TerraChrono) :</b> 100 pts par carte bien placée + 50 pts bonus au vainqueur final (le joueur avec le plus de points gagne).</p>"
+    +"<div style='text-align:right;margin-top:14px'><button class='btn primary' id='closeHelp'>Compris</button></div>";
+  $("#modal").classList.add("open");
+  $("#closeHelp").onclick=()=>$("#modal").classList.remove("open");
 }
 
 /* ================= HISTOIRE : TERRACHRONO ================= */
@@ -2281,7 +1654,54 @@ function fmtYear(y){return y<0?(Math.abs(y)+" av. J.-C."):String(y);}
 function renderHist(){
   const p=P();
   loadEphem();
-  $("#friseStart").onclick=function(){try{if(!requireProfile())return;renderFriseSetup();}catch(e){toast("Oups, réessaie !");}};
+  
+  $("#friseCreateOnline").onclick = function() {
+    if(!requireProfile()) return;
+    createFriseRoom(false);
+  };
+  $("#friseStartSolo").onclick = function() {
+    if(!requireProfile()) return;
+    createFriseRoom(true);
+  };
+
+  // Liste des parties de Frise en ligne
+  const rList = $("#friseRoomsList");
+  if (rList) {
+    const rooms = Object.values(dbState.friseRooms || {}).filter(r => r.status !== "over" || (Date.now() - (r.updatedAt || 0) < 300000));
+    if (!rooms.length) {
+      rList.innerHTML = "<div class='mut' style='padding:8px;background:var(--card2);border-radius:10px'>Aucune partie en ligne active. Crée un salon pour inviter les autres joueurs !</div>";
+    } else {
+      rList.innerHTML = rooms.map(r => {
+        const isIn = p && r.players && r.players.includes(p.name);
+        const curPlayer = r.players && r.players[r.turnIdx];
+        const isMyTurn = p && r.status === "playing" && curPlayer === p.name && r.alive && r.alive[p.name];
+        let statusTxt = r.status === "waiting" ? "⏳ En attente de joueurs" : (r.status === "playing" ? ("⚔️ Tour de " + esc(curPlayer)) : "🏁 Terminée");
+        let btnHtml = "";
+        if (r.status === "waiting") {
+          btnHtml = isIn
+            ? "<button class='btn small primary' data-openroom='" + r.id + "'>Ouvrir le salon ➜</button>"
+            : "<button class='btn small gold' data-joinroom='" + r.id + "'>Rejoindre ➜</button>";
+        } else {
+          btnHtml = "<button class='btn small " + (isMyTurn ? "gold" : "") + "' data-openroom='" + r.id + "'>" + (isMyTurn ? "🔥 Jouer mon tour !" : "Observer / Reprendre ➜") + "</button>";
+        }
+        return "<div class='card' style='background:var(--card2);margin:6px 0;padding:10px 12px'>"
+          + "<div class='row'><div><b>Salon de " + esc(r.host) + "</b> <span class='tag'>" + statusTxt + "</span>"
+          + "<div class='mut' style='margin-top:4px'>Joueurs (" + r.players.length + ") : " + r.players.map(esc).join(", ") + "</div></div>"
+          + "<span class='spacer'></span>" + btnHtml + "</div></div>";
+      }).join("");
+      
+      rList.querySelectorAll("[data-openroom]").forEach(b => b.onclick = () => {
+        activeRoomId = b.dataset.openroom;
+        show("frise");
+        renderFrise();
+      });
+      rList.querySelectorAll("[data-joinroom]").forEach(b => b.onclick = () => {
+        if(!requireProfile()) return;
+        joinFriseRoom(b.dataset.joinroom);
+      });
+    }
+  }
+
   if(!p){
     $("#histStats").innerHTML="Choisis un profil d'abord (en haut à droite).";
     $("#histDailyStatus").textContent="5 questions « En quelle année ? » dont l'événement du jour (Wikipédia)";
@@ -2289,355 +1709,819 @@ function renderHist(){
     $("#histDailyBtn").onclick=function(){if(!requireProfile())return;startHistDaily();};
     return;
   }
-  const h=ensureHist(p), dk=todayKey(), done=h.daily[dk]&&h.daily[dk].done;
-  $("#histStats").innerHTML="Points histoire : <b>"+fmt(h.pts)+"</b><br>Frises gagnées : <b>"+h.wins+"</b><br>Placements réussis : <b>"+h.placements+"</b><br>Meilleur défi : <b>"+fmt(h.best)+" pts</b>";
-  $("#histDailyStatus").textContent=done?(fmt(h.daily[dk].score)+" pts · "+h.daily[dk].marks):"5 questions « En quelle année ? » dont l'événement du jour (Wikipédia)";
-  $("#histAchMini").innerHTML=ACH_H.map(function(a){return (h[a.id]||p.ach[a.id]?"✅ ":"⬜ ")+a.ico+" "+a.n;}).join("<br>");
-  $("#histDailyBtn").textContent=done?"Voir le classement histoire ➜":"📅 Défi du jour : Que s'est-il passé ?";
-  $("#histDailyBtn").onclick=function(){if(done){currentTab="hist";show("board");renderBoard("hist");}else{startHistDaily();}};
+  const h=ensureHist(p), dk=todayKey(), done=h.daily[dk];
+  $("#histStats").innerHTML="Points : <b>"+fmt(h.pts)+"</b> · Victoires : <b>"+h.wins+"</b>/"+h.rounds+" · Cartes posées : <b>"+h.placements+"</b> · Série : <b>"+h.streak+"</b> j";
+  if(done){
+    $("#histDailyStatus").textContent=done.marks+" — "+fmt(done.score)+" pts";
+    $("#histDailyBtn").textContent="Voir les résultats du jour";
+    $("#histDailyBtn").onclick=function(){renderHistDailyDone(done);show("histdaily");};
+  }else{
+    $("#histDailyStatus").textContent="5 questions « En quelle année ? » dont l'événement du jour (Wikipédia)";
+    $("#histDailyBtn").textContent="📅 Jouer le défi du jour ➜";
+    $("#histDailyBtn").onclick=startHistDaily;
+  }
+  const hids=["h1","hw","hp","hs3"];
+  $("#histAchMini").innerHTML=ACHS.filter(function(a){return hids.indexOf(a.id)!==-1;}).map(function(a){
+    return (p.ach.indexOf(a.id)!==-1?"✅ ":"🔒 ")+a.title;
+  }).join("<br>");
 }
 
-/* ---- Défi quotidien histoire ---- */
-let hd=null,hdTimer=null;
-function stopHdTimer(){if(hdTimer){clearInterval(hdTimer);hdTimer=null;}}
-function buildHistDaily(){
-  const rng=mulberry32(hashCode("hist-"+todayKey()));
-  const used=new Set(),out=[];
-  let guard=0;
-  while(out.length<5&&guard++<400){
-    const e=EVENTS[Math.floor(rng()*EVENTS.length)];
-    if(used.has(e.t))continue; used.add(e.t);
-    const opts=[e.y]; let g2=0;
-    while(opts.length<4&&g2++<80){
-      let y;
-      if(rng()<0.55)y=e.y+Math.floor(rng()*60)-30;
-      else y=EVENTS[Math.floor(rng()*EVENTS.length)].y;
-      if(y===e.y)y=e.y+1+Math.floor(rng()*8);
-      if(opts.indexOf(y)<0)opts.push(y);
-    }
-    for(let i=opts.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const tmp=opts[i];opts[i]=opts[j];opts[j]=tmp;}
-    out.push({t:e.t,x:e.x,y:e.y,opts:opts});
+/* ---- Événements du jour via Wikipédia ---- */
+let WIKI={events:null,deck:null,deckBusy:false};
+function loadEphem(){
+  const d=new Date(), m=d.getMonth()+1, day=d.getDate();
+  const box=$("#ephemBox");
+  const fb=EPHEM.filter(function(e){return e.m===m&&e.d===day;});
+  box.innerHTML=fb.length?"<b>📅 Ce jour dans l'histoire :</b> "+esc(fb[0].t):"";
+  if(WIKI.events){showWikiEphem(WIKI.events);return;}
+  fetch("https://fr.wikipedia.org/api/rest_v1/feed/onthisday/events/"+m+"/"+day)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      const evs=(data.events||[]).filter(function(e){return typeof e.year==="number"&&e.text&&e.text.length<200;});
+      if(evs.length){WIKI.events=evs;showWikiEphem(evs);}
+    }).catch(function(){});
+}
+function showWikiEphem(evs){
+  const rng=mulberry32(hashCode("wiki-"+todayKey()));
+  const e=evs[Math.floor(rng()*evs.length)];
+  $("#ephemBox").innerHTML="<b>📅 Ce jour dans l'histoire (Wikipédia) :</b> "+esc(e.text)+" <span class='tag'>"+fmtYear(e.year)+"</span>";
+}
+
+function buildWikiPool(onProg){
+  const rng=mulberry32(hashCode("deck-"+todayKey()));
+  const days=[];
+  for(let i=0;i<7;i++){
+    let m,d,k;
+    do{m=1+Math.floor(rng()*12);d=1+Math.floor(rng()*28);k=m+"/"+d;}while(days.indexOf(k)!==-1);
+    days.push(k);
   }
-  return out;
-}
-async function startHistDaily(){
-  const dateKey=todayKey(), d=new Date();
-  const cards=await fetchWikiDay(d.getMonth()+1,d.getDate());
-  let qs=null;
-  if(cards&&cards.length>=8){
-    const top=cards.slice().sort(function(a,b){return hashCode(a.t)-hashCode(b.t);}).slice(0,30);
-    const rng=mulberry32(hashCode("histd-"+dateKey));
-    const used=new Set(),out=[];
-    function mkOpts(ev){
-      const opts=[ev.y]; let g2=0;
-      while(opts.length<4&&g2++<80){
-        let y;
-        if(rng()<0.55)y=ev.y+Math.floor(rng()*60)-30;
-        else y=top[Math.floor(rng()*top.length)].y;
-        if(y===ev.y)y=ev.y+1+Math.floor(rng()*8);
-        if(opts.indexOf(y)<0)opts.push(y);
-      }
-      for(let i=opts.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const tmp=opts[i];opts[i]=opts[j];opts[j]=tmp;}
-      return opts;
-    }
-    const todayEv=top[Math.floor(rng()*Math.min(10,top.length))];
-    if(todayEv){
-      used.add(todayEv.t);
-      const dLabel=d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
-      out.push({t:"C'est arrivé un "+dLabel+" : "+todayEv.t,x:todayEv.x,y:todayEv.y,opts:mkOpts(todayEv)});
-    }
-    let guard=0;
-    while(out.length<5&&guard++<300){
-      const e=top[Math.floor(rng()*top.length)];
-      if(used.has(e.t))continue; used.add(e.t);
-      out.push({t:e.t,x:e.x,y:e.y,opts:mkOpts(e)});
-    }
-    if(out.length===5)qs=out;
-  }
-  if(!qs)qs=buildHistDaily();
-  hd={qs:qs,i:0,pts:0,results:[],timeLeft:30,total:30,locked:false};
-  show("histdaily"); renderHdQ();
-}
-function renderHdQ(){
-  stopHdTimer();
-  const q=hd.qs[hd.i];
-  hd.timeLeft=30; hd.locked=false;
-  $("#hdBox").innerHTML="<div class='row'><span class='tag'>📜 Question "+(hd.i+1)+"/5</span>"+(q.t.indexOf("C'est arrivé un")===0?"<span class='tag'>📅 Éphéméride du jour</span>":"")+"<span class='spacer'></span><span class='tag'>Session : "+fmt(hd.pts)+" pts</span></div>"
-   +"<h1>En quelle année… ?</h1><div style='font-size:1.15rem;font-weight:700;margin-bottom:10px'>"+esc(q.t)+"</div>"
-   +"<div class='timer'><div id='hdBar' style='width:100%'></div></div>"
-   +"<div class='grid'>"+q.opts.map(function(o){return "<button class='btn' data-opt='"+o+"'>"+fmtYear(o)+"</button>";}).join("")+"</div>"
-   +"<div id='hdFb' style='margin-top:12px'></div>";
-  document.querySelectorAll("[data-opt]").forEach(function(b){b.onclick=function(){hdAnswer(parseInt(b.dataset.opt,10),q);};});
-  hdTimer=setInterval(function(){
-    hd.timeLeft-=0.1;
-    const bar=$("#hdBar");
-    if(bar)bar.style.width=Math.max(0,hd.timeLeft/hd.total*100)+"%";
-    if(hd.timeLeft<=0&&!hd.locked)hdAnswer(null,q);
-  },100);
-}
-function hdAnswer(opt,q){
-  if(hd.locked)return; hd.locked=true; stopHdTimer();
-  const ok=opt===q.y;
-  const h=P()?ensureHist(P()):{streak:0};
-  const pts=ok?Math.round(1000*(0.5+0.5*Math.max(0,hd.timeLeft)/hd.total)*(1+0.02*Math.min(h.streak||0,25))):0;
-  hd.pts+=pts;
-  hd.results.push({q:q,ok:ok,pts:pts,mark:ok?"🟢":(opt===null?"⚫":"🔴")});
-  document.querySelectorAll("[data-opt]").forEach(function(b){
-    b.disabled=true;
-    const v=parseInt(b.dataset.opt,10);
-    if(v===q.y)b.style.borderColor="var(--good)";
-    else if(opt!==null&&v===opt)b.style.borderColor="var(--bad)";
+  let done=0;
+  return Promise.all(days.map(function(md){
+    return fetch("https://fr.wikipedia.org/api/rest_v1/feed/onthisday/events/"+md)
+      .then(function(r){return r.json();})
+      .then(function(data){done++;if(onProg)onProg(done,days.length);return data.events||[];})
+      .catch(function(){done++;if(onProg)onProg(done,days.length);return [];});
+  })).then(function(lists){
+    const byYear={}, out=[];
+    lists.forEach(function(list){list.forEach(function(e){
+      if(typeof e.year!=="number"||!e.text||e.text.length<28||e.text.length>150)return;
+      if(byYear[e.year])return;
+      const p=e.pages&&e.pages[0], title=(p&&p.titles&&p.titles.normalized)||e.text.slice(0,42);
+      byYear[e.year]=1; out.push({y:e.year,t:title,x:e.text});
+    });});
+    return out;
   });
-  $("#hdFb").innerHTML="<div class='fb-title'>"+(ok?"🎯 Exact !":(opt===null?"⚫ Temps écoulé":"🔴 Raté"))+"</div>"
-   +"<div class='fb-pts'>+"+fmt(pts)+" pts</div><div class='mut'>Réponse : <b>"+fmtYear(q.y)+"</b></div>"
-   +"<div class='mut' style='margin-top:6px'>🌍 "+esc(q.x)+"</div>"
-   +"<button class='btn primary' id='hdNext' style='margin-top:10px'>"+(hd.i+1<5?"Suivante ➜":"Terminer 🏁")+"</button>";
-  $("#hdNext").onclick=function(){hd.i++;if(hd.i<5)renderHdQ();else finishHistDaily();};
-  beep(ok?740:220,.22); saveCloud();
 }
-function finishHistDaily(){
-  const p=P(); if(!p)return;
-  const h=ensureHist(p), dk=todayKey();
-  const total=hd.pts, marks=hd.results.map(function(r){return r.mark;}).join("");
-  const first=!(h.daily[dk]&&h.daily[dk].done);
-  if(first){
-    if(h.last===yesterdayKey())h.streak++; else if(h.last!==dk)h.streak=1;
-    h.last=dk;
-  }
-  h.daily[dk]={score:Math.max(total,(h.daily[dk]&&h.daily[dk].score)||0),marks:marks,done:true};
-  if(first)h.pts+=total;
-  h.best=Math.max(h.best,h.daily[dk].score);
-  checkAch(); saveCloud();
-  $("#hdBox").innerHTML="<div style='text-align:center'><h1>📜 Défi histoire terminé</h1><div class='big'>"+fmt(total)+" pts</div><div class='marks'>"+marks+"</div>"
-   +"<div class='mut'>"+(first?("Série histoire : "+h.streak+" jour"+(h.streak>1?"s":"")+" 🔥"):"Déjà joué aujourd'hui : pas de points en plus.")+"</div>"
-   +"<div class='row' style='justify-content:center;margin-top:12px'>"
-   +"<button class='btn gold' id='hdShare'>📋 Copier ma fiche</button>"
-   +"<button class='btn' id='hdBoard'>🏆 Classement histoire</button>"
-   +"<button class='btn' data-go='hist'>📜 Menu</button></div></div>"
-   +"<div style='margin-top:14px'>"+hd.results.map(function(r){
-     return "<div style='padding:8px 0;border-bottom:1px solid var(--line)'><span style='font-size:1.2rem'>"+r.mark+"</span> "+esc(r.q.t)
-     +" <span class='mut'>· <b>"+fmtYear(r.q.y)+"</b> · "+fmt(r.pts)+" pts</span></div>";}).join("")+"</div>";
-  $("#hdShare").onclick=function(){
-    const txt="📜 TerraChrono · "+todayKey()+"\nEn quelle année ? · "+fmt(total)+" pts\n"+marks+"\nSérie : "+h.streak+" j 🔥\n#TerraChrono";
-    const done=function(){toast("Fiche copiée ! 📋");};
-    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(function(){fallbackCopy(txt,done);});
-    else fallbackCopy(txt,done);
-  };
-  $("#hdBoard").onclick=function(){currentTab="hist";show("board");renderBoard("hist");};
+function ensureWikiDeck(onProg){
+  if(WIKI.deck)return Promise.resolve(WIKI.deck);
+  if(WIKI.deckBusy)return Promise.resolve([]);
+  WIKI.deckBusy=true;
+  return buildWikiPool(onProg).then(function(out){
+    WIKI.deckBusy=false;
+    if(out.length>=40){out.forEach(function(e,i){e.i=i;});WIKI.deck=out;}
+    return WIKI.deck||[];
+  });
 }
+function DECK(){return WIKI.deck||EVENTS;}
 
-/* ---- Frise royale (solo / multi sans blocage) ---- */
-let frise=null,friseTimer=null;
-function stopFriseTimer(){if(friseTimer){clearInterval(friseTimer);friseTimer=null;}}
+/* ---- Frise royale EN LIGNE (Lobby & Temps Réel) ---- */
+let friseTimer = null;
+function stopFriseTimer(){ if(friseTimer){ clearInterval(friseTimer); friseTimer=null; } }
 function shufIdx(arr){
   const a=arr.map(function(_,i){return i;});
   for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}
   return a;
 }
-function renderFriseSetup(){
-  const names=Object.keys(dbState.profiles);
-  const curName = currentUsername || (names.length ? names[0] : "Joueur");
-  $("#friseBox").innerHTML="<h2>⚔️ Nouvelle frise</h2><p class='mut'>Choisis les participants. <b>En solo</b> (coche juste ton profil), tu peux tester la frise immédiatement sans aucun blocage !</p>"
-   +(names.length?names.map(function(n){return "<label style='display:flex;gap:8px;align-items:center;margin:6px 0'><input type='checkbox' class='fp' value='"+esc(n)+"' "+(n===curName?"checked":"")+" style='width:auto'/> "+esc(n)+"</label>";}).join(""):"<input type='text' id='soloFp' value='"+esc(curName)+"' />")
-   +"<div class='row' style='margin-top:10px'><button class='btn gold' id='friseGo'>Lancer la frise ➜</button><button class='btn' data-go='hist'>Annuler</button></div>";
-  $("#friseGo").onclick=function(){
-    try{
-      let sel=Array.prototype.slice.call(document.querySelectorAll(".fp:checked")).map(function(c){return c.value;});
-      if(!sel.length){
-        const inp=$("#soloFp");
-        if(inp&&inp.value.trim()) sel=[inp.value.trim()];
-        else sel=[curName];
-      }
-      prepareFrise(sel);
-    }catch(err){toast("Oups, réessaie !");}
+
+function getActiveRoom() {
+  if (!activeRoomId || !dbState.friseRooms) return null;
+  return dbState.friseRooms[activeRoomId] || null;
+}
+
+async function createFriseRoom(isSolo) {
+  const p = P(); if (!p) return;
+  const id = "room_" + Date.now() + "_" + Math.floor(Math.random() * 999);
+  if (!dbState.friseRooms) dbState.friseRooms = {};
+  
+  // Nettoie les vieilles parties terminées de plus d'1h
+  Object.keys(dbState.friseRooms).forEach(k => {
+    if (Date.now() - (dbState.friseRooms[k].updatedAt || 0) > 3600000) delete dbState.friseRooms[k];
+  });
+
+  const room = {
+    id: id,
+    host: p.name,
+    status: isSolo ? "playing" : "waiting",
+    players: [p.name],
+    alive: {},
+    hands: {},
+    limits: {},
+    powers: {},
+    sablier: {},
+    mistakeFree: {},
+    roundPts: {},
+    placed: [],
+    src: DECK(),
+    deck: shufIdx(DECK()),
+    turnIdx: 0,
+    over: false,
+    drawn: false,
+    winner: null,
+    sel: null,
+    updatedAt: Date.now()
   };
+  
+  dbState.friseRooms[id] = room;
+  activeRoomId = id;
   show("frise");
-}
-function prepareFrise(names){
-  $("#friseBox").innerHTML="<h2>⚔️ Nouvelle frise</h2><p class='mut' id='wikiLoad'>Chargement des événements Wikipédia…</p>";
-  ensureWikiDeck(function(d,t){const el=$("#wikiLoad");if(el)el.textContent="Chargement des événements Wikipédia… ("+d+"/"+t+")";})
-   .then(function(){startFrise(names);});
-}
-function startFrise(names){
-  const h=ensureHist(P()); h.rounds++;
-  frise={players:names.slice(),alive:{},hands:{},limits:{},powers:{},sablier:{},mistakeFree:{},roundPts:{},
-    placed:[],src:DECK(),deck:shufIdx(DECK()),turnIdx:0,over:false,drawn:false,winner:null,sel:null,timeLeft:0};
-  names.forEach(function(n){
-    frise.alive[n]=true;frise.hands[n]=[];frise.limits[n]=4;frise.roundPts[n]=0;
-    frise.powers[n]={shield:0,loupe:0,chance:0};frise.sablier[n]=false;frise.mistakeFree[n]=true;
-  });
-  frise.placed.push({e:frise.src[frise.deck.pop()],by:null});
-  names.forEach(drawUp);
-  checkAch(); saveCloud();
-  show("frise"); renderFrise();
-}
-function drawUp(n){
-  if(!frise||frise.over)return;
-  while(frise.hands[n].length<frise.limits[n]){
-    if(!frise.deck.length){
-      const inPlay=new Set();
-      frise.placed.forEach(function(pc){inPlay.add(pc.e.i);});
-      Object.keys(frise.hands).forEach(function(k){frise.hands[k].forEach(function(i){inPlay.add(i);});});
-      frise.deck=shufIdx(frise.src).filter(function(i){return !inPlay.has(i);});
-      if(!frise.deck.length){frise.over=true;frise.drawn=true;return;}
-    }
-    frise.hands[n].push(frise.deck.pop());
-    if(Math.random()<0.12){
-      const ps=frise.powers[n];
-      const keys=["shield","loupe","chance"].filter(function(k){return ps[k]<2;});
-      if(keys.length){ps[keys[Math.floor(Math.random()*keys.length)]]++;}
-    }
-    if(Math.random()<0.08)frise.sablier[n]=true;
+  
+  if (isSolo) {
+    await startFriseRoom(id);
+  } else {
+    await saveCloud(true);
+    renderFrise();
+    toast("🌐 Salon créé ! En attente d'autres joueurs…");
   }
 }
-function renderFrise(){
-  stopFriseTimer();
-  if(frise.over){renderFriseEnd();return;}
-  const cur=frise.players[frise.turnIdx];
-  const sorted=frise.placed.slice().sort(function(a,b){return a.e.y-b.e.y;});
-  let tl="";
-  sorted.forEach(function(pc,i){
-    tl+="<div class='tl-gap' data-gap='"+i+"'>➕</div><div class='tl-card'><b>"+esc(pc.e.t)+"</b><div class='mut'>"+esc(pc.e.x)+"</div></div>";
+
+async function joinFriseRoom(id) {
+  const p = P(); if (!p) return;
+  const room = dbState.friseRooms && dbState.friseRooms[id];
+  if (!room || room.status !== "waiting") {
+    toast("Ce salon n'est plus disponible.");
+    return;
+  }
+  if (!room.players.includes(p.name)) {
+    room.players.push(p.name);
+    room.updatedAt = Date.now();
+    await saveCloud(true);
+  }
+  activeRoomId = id;
+  show("frise");
+  renderFrise();
+}
+
+async function startFriseRoom(id) {
+  const room = dbState.friseRooms && dbState.friseRooms[id];
+  if (!room) return;
+  
+  $("#friseBox").innerHTML = "<h2>⚔️ Préparation de la frise en ligne…</h2><p class='mut' id='wikiLoad'>Chargement des événements Wikipédia…</p>";
+  await ensureWikiDeck(function(d,t){const el=$("#wikiLoad");if(el)el.textContent="Chargement des événements Wikipédia… ("+d+"/"+t+")";});
+  
+  const p = P();
+  if (p) { const h = ensureHist(p); h.rounds++; }
+  
+  room.status = "playing";
+  room.src = DECK();
+  room.deck = shufIdx(room.src);
+  room.placed = [{ e: room.src[room.deck.pop()], by: null }];
+  room.turnIdx = 0;
+  room.over = false;
+  room.drawn = false;
+  room.winner = null;
+  room.sel = null;
+  room.updatedAt = Date.now();
+  
+  room.players.forEach(n => {
+    room.alive[n] = true;
+    room.hands[n] = [];
+    room.limits[n] = 4;
+    room.roundPts[n] = 0;
+    room.powers[n] = { shield: 0, loupe: 0, chance: 0 };
+    room.sablier[n] = false;
+    room.mistakeFree[n] = true;
+    drawUpRoom(room, n);
   });
-  tl+="<div class='tl-gap' data-gap='"+sorted.length+"'>➕</div>";
-  const ps=frise.powers[cur];
-  const hand=frise.hands[cur].map(function(idx,i){
-    const e=frise.src[idx];
-    return "<div class='hcard"+(frise.sel===i?" sel":"")+"' data-h='"+i+"'><b>"+esc(e.t)+"</b><div>"+esc(e.x)+"</div></div>";
+  
+  checkAch();
+  await saveCloud(true);
+  renderFrise();
+}
+
+function drawUpRoom(room, n) {
+  if (!room || room.over) return;
+  while (room.hands[n].length < room.limits[n]) {
+    if (!room.deck.length) {
+      const inPlay = new Set();
+      room.placed.forEach(pc => inPlay.add(pc.e.i));
+      Object.keys(room.hands).forEach(k => (room.hands[k] || []).forEach(i => inPlay.add(i)));
+      room.deck = shufIdx(room.src).filter(i => !inPlay.has(i));
+      if (!room.deck.length) { room.over = true; room.drawn = true; room.status = "over"; return; }
+    }
+    room.hands[n].push(room.deck.pop());
+    if (Math.random() < 0.12) {
+      const ps = room.powers[n];
+      const keys = ["shield", "loupe", "chance"].filter(k => ps[k] < 2);
+      if (keys.length) ps[keys[Math.floor(Math.random() * keys.length)]]++;
+    }
+    if (Math.random() < 0.08) room.sablier[n] = true;
+  }
+}
+
+function renderFrise() {
+  stopFriseTimer();
+  const room = getActiveRoom();
+  const me = P() ? P().name : null;
+  
+  if (!room) {
+    $("#friseBox").innerHTML = "<h2>Partie introuvable</h2><button class='btn' data-go='hist'>← Retour</button>";
+    return;
+  }
+
+  // ÉCRAN DE LOBBY (EN ATTENTE DES JOUEURS)
+  if (room.status === "waiting") {
+    const isHost = me === room.host;
+    $("#friseBox").innerHTML = "<h2>🌐 Salon en ligne de " + esc(room.host) + "</h2>"
+      + "<p class='mut'>Partage l'écran ou dis aux autres joueurs connectés de cliquer sur <b>Rejoindre</b> depuis leur accueil !</p>"
+      + "<div class='card' style='background:var(--card2);margin:12px 0'>"
+      + "<b>👥 Joueurs inscrits (" + room.players.length + ") :</b>"
+      + "<div style='margin-top:8px'>" + room.players.map(n => "<div style='padding:4px 0'>🟢 <b>" + esc(n) + "</b>" + (n === room.host ? " 👑 (Hôte)" : "") + "</div>").join("") + "</div>"
+      + "</div>"
+      + "<div class='row' style='margin-top:14px'>"
+      + (isHost
+          ? "<button class='btn gold' id='lobbyStartBtn'>🚀 Lancer la partie maintenant (" + room.players.length + " joueur" + (room.players.length > 1 ? "s" : "") + ")</button>"
+          : "<span class='tag'>⏳ En attente que " + esc(room.host) + " lance la partie…</span>")
+      + "<span class='spacer'></span>"
+      + "<button class='btn danger small' id='lobbyLeaveBtn'>Quitter le salon</button>"
+      + "</div>";
+      
+    if ($("#lobbyStartBtn")) {
+      $("#lobbyStartBtn").onclick = () => startFriseRoom(room.id);
+    }
+    $("#lobbyLeaveBtn").onclick = async () => {
+      if (isHost) {
+        delete dbState.friseRooms[room.id];
+      } else if (me) {
+        room.players = room.players.filter(x => x !== me);
+      }
+      activeRoomId = null;
+      await saveCloud(true);
+      show("hist");
+    };
+    return;
+  }
+
+  if (room.over || room.status === "over") {
+    renderFriseEnd(room);
+    return;
+  }
+
+  const cur = room.players[room.turnIdx];
+  const isMyTurn = (me === cur);
+  const sorted = room.placed.slice().sort((a, b) => a.e.y - b.e.y);
+  
+  let tl = "";
+  sorted.forEach((pc, i) => {
+    tl += "<div class='tl-gap' data-gap='" + i + "' style='" + (!isMyTurn ? "opacity:.3;cursor:not-allowed" : "") + "'>➕</div>"
+        + "<div class='tl-card'><b>" + esc(pc.e.t) + "</b><div class='mut'>" + esc(pc.e.x) + "</div></div>";
+  });
+  tl += "<div class='tl-gap' data-gap='" + sorted.length + "' style='" + (!isMyTurn ? "opacity:.3;cursor:not-allowed" : "") + "'>➕</div>";
+
+  const viewPlayer = (me && room.players.includes(me)) ? me : cur;
+  const ps = room.powers[viewPlayer] || { shield: 0, loupe: 0, chance: 0 };
+  const myHandArr = room.hands[viewPlayer] || [];
+  
+  const handHtml = myHandArr.map((idx, i) => {
+    const e = room.src[idx];
+    const isSel = isMyTurn && room.sel === i;
+    return "<div class='hcard" + (isSel ? " sel" : "") + "' data-h='" + i + "' style='" + (!isMyTurn ? "opacity:.7;cursor:default" : "") + "'><b>" + esc(e.t) + "</b><div>" + esc(e.x) + "</div></div>";
   }).join("");
-  const aliveList=frise.players.map(function(n){return (frise.alive[n]?"🟢":"💀")+" "+esc(n);}).join(" · ");
-  $("#friseBox").innerHTML="<div class='row'><b>⚔️ Frise · Tour de "+esc(cur)+"</b><span class='spacer'></span><span class='tag'>"+fmt(frise.roundPts[cur])+" pts cette frise</span></div>"
-   +"<div class='mut' style='margin:6px 0'>"+aliveList+"</div>"
-   +(frise.sablier[cur]?"<div style='color:var(--bad);font-weight:700'>⏳ Sablier ! Place une carte dans <b id='sabT'>20</b> s</div>":"")
-   +"<h2>🗺️ La frise (du plus ancien ➜ au plus récent)</h2><div class='tl'>"+tl+"</div>"
-   +"<h2>🃏 Ta main — sélectionne une carte, puis clique un ➕</h2><div class='hand'>"+hand+"</div>"
-   +"<div class='row' style='margin-top:8px'>"
-   +"<button class='btn small' id='loupeBtn'>🔍 Loupe ×"+ps.loupe+"</button>"
-   +"<button class='btn small' id='chanceBtn'>🎲 Chance ×"+ps.chance+"</button>"
-   +"<button class='btn small' id='swapBtn'>🔄 Repiocher (main max : "+frise.limits[cur]+" ➜ "+Math.max(1,frise.limits[cur]-1)+")</button>"
-   +"<span class='spacer'></span><span class='tag'>🛡️ Boucliers : "+ps.shield+"</span></div>";
-  document.querySelectorAll("[data-h]").forEach(function(el){el.onclick=function(){frise.sel=parseInt(el.dataset.h,10);renderFrise();};});
-  document.querySelectorAll("[data-gap]").forEach(function(el){el.onclick=function(){placeCard(parseInt(el.dataset.gap,10));};});
-  $("#loupeBtn").onclick=function(){useLoupe(cur);};
-  $("#chanceBtn").onclick=function(){useChance(cur);};
-  $("#swapBtn").onclick=function(){useSwap(cur);};
-  if(frise.sablier[cur]){
-    frise.timeLeft=20;
-    friseTimer=setInterval(function(){
-      frise.timeLeft-=0.1;
-      const el=$("#sabT"); if(el)el.textContent=Math.ceil(Math.max(0,frise.timeLeft));
-      if(frise.timeLeft<=0){frise.sablier[cur]=false;handleWrong(cur,"⏳ Temps écoulé !");}
-    },100);
+
+  const aliveList = room.players.map(n => {
+    const activeTurn = (n === cur) ? "👉 " : "";
+    return activeTurn + (room.alive[n] ? "🟢" : "💀") + " <b>" + esc(n) + "</b> (" + (room.hands[n] ? room.hands[n].length : 0) + " cartes · " + fmt(room.roundPts[n] || 0) + " pts)";
+  }).join(" · ");
+
+  $("#friseBox").innerHTML = "<div class='row'>"
+    + (isMyTurn
+        ? "<span class='tag' style='background:var(--gold);color:#241a02;font-weight:800'>🔥 C'EST À TON TOUR (" + esc(cur) + ") !</span>"
+        : "<span class='tag'>⏳ Tour de <b>" + esc(cur) + "</b> — En attente de son coup…</span>")
+    + "<span class='spacer'></span><span class='tag'>" + fmt(room.roundPts[viewPlayer] || 0) + " pts</span></div>"
+    + "<div class='mut' style='margin:8px 0'>" + aliveList + "</div>"
+    + (room.sablier[cur] ? "<div style='color:var(--bad);font-weight:700'>⏳ Sablier actif pour " + esc(cur) + " ! <b id='sabT'>20</b> s</div>" : "")
+    + "<h2>🗺️ La frise en ligne (du plus ancien ➜ au plus récent)</h2><div class='tl'>" + tl + "</div>"
+    + "<h2>🃏 " + (isMyTurn ? "Ta main — sélectionne une carte, puis clique un ➕" : "Tes cartes en main (tu joueras au prochain tour)") + "</h2><div class='hand'>" + handHtml + "</div>"
+    + "<div class='row' style='margin-top:8px'>"
+    + "<button class='btn small' id='loupeBtn' " + (!isMyTurn ? "disabled" : "") + ">🔍 Loupe ×" + ps.loupe + "</button>"
+    + "<button class='btn small' id='chanceBtn' " + (!isMyTurn ? "disabled" : "") + ">🎲 Chance ×" + ps.chance + "</button>"
+    + "<button class='btn small' id='swapBtn' " + (!isMyTurn ? "disabled" : "") + ">🔄 Repiocher (max : " + (room.limits[viewPlayer] || 4) + ")</button>"
+    + "<span class='spacer'></span><span class='tag'>🛡️ Boucliers : " + ps.shield + "</span></div>";
+
+  if (isMyTurn) {
+    document.querySelectorAll("[data-h]").forEach(el => el.onclick = () => {
+      room.sel = parseInt(el.dataset.h, 10);
+      renderFrise();
+    });
+    document.querySelectorAll("[data-gap]").forEach(el => el.onclick = () => {
+      placeCardRoom(room, parseInt(el.dataset.gap, 10));
+    });
+    $("#loupeBtn").onclick = () => useLoupeRoom(room, cur);
+    $("#chanceBtn").onclick = () => useChanceRoom(room, cur);
+    $("#swapBtn").onclick = () => useSwapRoom(room, cur);
+  }
+
+  if (room.sablier[cur] && isMyTurn) {
+    let timeLeft = 20;
+    friseTimer = setInterval(() => {
+      timeLeft -= 0.1;
+      const el = $("#sabT"); if (el) el.textContent = Math.ceil(Math.max(0, timeLeft));
+      if (timeLeft <= 0) {
+        room.sablier[cur] = false;
+        handleWrongRoom(room, cur, "⏳ Temps écoulé !");
+      }
+    }, 100);
   }
 }
-function placeCard(gap){
-  const cur=frise.players[frise.turnIdx];
-  if(frise.sel===null){toast("Choisis d'abord une carte !");return;}
-  const e=frise.src[frise.hands[cur][frise.sel]];
-  const sorted=frise.placed.slice().sort(function(a,b){return a.e.y-b.e.y;});
-  const left=gap>0?sorted[gap-1].e.y:null, right=gap<sorted.length?sorted[gap].e.y:null;
-  const ok=(left===null||e.y>left)&&(right===null||e.y<right);
-  frise.sablier[cur]=false;
-  if(ok){
-    frise.placed.push({e:e,by:cur});
-    frise.hands[cur].splice(frise.sel,1);
-    frise.sel=null;
-    frise.roundPts[cur]+=25;
-    if(P()){ensureHist(P()).pts+=25; ensureHist(P()).placements++;}
-    toast("✅ Bien placé ! +25 pts"); beep(740,.18);
-    drawUp(cur);
-    if(frise.over){checkAch();saveCloud();renderFrise();return;}
-    nextTurn();
+
+async function placeCardRoom(room, gap) {
+  const cur = room.players[room.turnIdx];
+  if (room.sel === null) { toast("Choisis d'abord une carte !"); return; }
+  const e = room.src[room.hands[cur][room.sel]];
+  const sorted = room.placed.slice().sort((a, b) => a.e.y - b.e.y);
+  const left = gap > 0 ? sorted[gap - 1].e.y : null;
+  const right = gap < sorted.length ? sorted[gap].e.y : null;
+  const ok = (left === null || e.y > left) && (right === null || e.y < right);
+  
+  room.sablier[cur] = false;
+  room.updatedAt = Date.now();
+
+  if (ok) {
+    room.placed.push({ e: e, by: cur });
+    room.hands[cur].splice(room.sel, 1);
+    room.sel = null;
+    room.roundPts[cur] = (room.roundPts[cur] || 0) + 100;
+    if (P() && P().name === cur) {
+      ensureHist(P()).pts += 100;
+      ensureHist(P()).placements++;
+    }
+    toast("✅ Bien placé ! +100 pts"); beep(740, .18);
+    drawUpRoom(room, cur);
+    if (room.over) {
+      await endFriseRoom(room);
+      return;
+    }
+    nextTurnRoom(room);
   } else {
-    handleWrong(cur,"❌ Mauvais placement !");
+    await handleWrongRoom(room, cur, "❌ Mauvais emplacement (" + e.t + " = " + fmtYear(e.y) + ") !");
   }
-  checkAch(); saveCloud(); renderFrise();
 }
-function handleWrong(cur,msg){
+
+async function handleWrongRoom(room, cur, msg) {
   stopFriseTimer();
-  frise.mistakeFree[cur]=false;
-  if(frise.sel!==null){
-    frise.deck.unshift(frise.hands[cur][frise.sel]);
-    frise.hands[cur].splice(frise.sel,1);
-    frise.sel=null;
+  room.updatedAt = Date.now();
+  if (room.sel !== null) {
+    room.deck.unshift(room.hands[cur][room.sel]);
+    room.hands[cur].splice(room.sel, 1);
+    room.sel = null;
   }
-  if(frise.powers[cur].shield>0){
-    frise.powers[cur].shield--;
-    toast("🛡️ "+msg+" Bouclier utilisé, tu survis !"); beep(660,.2);
-    drawUp(cur);
-    if(frise.over)return;
-    nextTurn();
+  const ps = room.powers[cur];
+  if (ps.shield > 0) {
+    ps.shield--;
+    toast("🛡️ Bouclier utilisé ! " + msg);
+    drawUpRoom(room, cur);
+    if (room.over) {
+      await endFriseRoom(room);
+      return;
+    }
+    nextTurnRoom(room);
   } else {
-    frise.alive[cur]=false;
-    frise.hands[cur].forEach(function(i){frise.deck.unshift(i);});
-    frise.hands[cur]=[];
-    toast("💀 "+msg+" "+cur+" est éliminé !"); beep(180,.3);
-    const aliveN=frise.players.filter(function(n){return frise.alive[n];});
-    if(aliveN.length<=1){endFrise(aliveN[0]||null);return;}
-    nextTurn();
+    room.alive[cur] = false;
+    room.mistakeFree[cur] = false;
+    toast("💀 " + msg + " " + cur + " est éliminé !"); beep(180, .3);
+    const aliveN = room.players.filter(n => room.alive[n]);
+    if (aliveN.length <= 1) {
+      await endFriseRoom(room);
+      return;
+    }
+    nextTurnRoom(room);
   }
 }
-function nextTurn(){
-  let guard=0;
-  do{frise.turnIdx=(frise.turnIdx+1)%frise.players.length;guard++;}
-  while(!frise.alive[frise.players[frise.turnIdx]]&&guard<60);
-}
-function endFrise(winner){
-  frise.over=true; frise.winner=winner;
-  const h=P()?ensureHist(P()):null;
-  if(winner&&h){
-    h.pts+=200; frise.roundPts[winner]+=200; h.wins++;
-    if(frise.mistakeFree[winner])h.perfectWins++;
-    toast("👑 "+winner+" remporte la frise ! +200 pts"); beep(988,.3);
+
+async function nextTurnRoom(room) {
+  let step = 0;
+  do {
+    room.turnIdx = (room.turnIdx + 1) % room.players.length;
+    step++;
+  } while (!room.alive[room.players[room.turnIdx]] && step <= room.players.length);
+  
+  const aliveN = room.players.filter(n => room.alive[n]);
+  if (aliveN.length === 0) {
+    await endFriseRoom(room);
+    return;
   }
-  checkAch(); saveCloud(); renderFriseEnd();
+  room.sel = null;
+  room.updatedAt = Date.now();
+  checkAch();
+  await saveCloud(true);
+  renderFrise();
 }
-function renderFriseEnd(){
-  const sorted=frise.placed.slice().sort(function(a,b){return a.e.y-b.e.y;});
-  $("#friseBox").innerHTML="<h1>"+(frise.winner?("👑 Victoire de "+esc(frise.winner)+" !"):(frise.drawn?"🤝 Plus de cartes ! Frise terminée":"Fin de la frise"))+"</h1>"
-   +"<p class='mut'>Voici la frise dans l'ordre du temps :</p>"
-   +"<div class='tl'>"+sorted.map(function(pc){
-     return "<div class='tl-card'><b>"+esc(pc.e.t)+"</b><div class='mut'>"+esc(pc.e.x)+"</div><div style='color:var(--gold);font-weight:700;margin-top:4px'>"+fmtYear(pc.e.y)+"</div></div>";
-   }).join("")+"</div>"
-   +"<div class='row' style='margin-top:12px'>"
-   +"<button class='btn gold' id='friseAgain'>🔁 Nouvelle frise</button>"
-   +"<button class='btn' data-go='hist'>📜 Menu histoire</button></div>"
-   +"<div class='mut' style='margin-top:10px'>Points de la frise : "+frise.players.map(function(n){return esc(n)+" "+fmt(frise.roundPts[n]);}).join(" · ")+"</div>";
-  $("#friseAgain").onclick=function(){startFrise(frise.players);};
+
+async function endFriseRoom(room) {
+  room.over = true;
+  room.status = "over";
+  room.updatedAt = Date.now();
+  
+  // Le gagnant est celui qui a cumulé le plus de points sur la frise !
+  let bestScore = -1;
+  let winner = null;
+  room.players.forEach(n => {
+    const sc = room.roundPts[n] || 0;
+    if (sc > bestScore) {
+      bestScore = sc;
+      winner = n;
+    }
+  });
+  if (bestScore <= 0) winner = null;
+  room.winner = winner;
+  
+  const p = P();
+  if (winner && p && p.name === winner) {
+    const h = ensureHist(p);
+    h.pts += 50;
+    room.roundPts[winner] = (room.roundPts[winner] || 0) + 50;
+    h.wins++;
+    if (room.mistakeFree[winner]) h.perfectWins++;
+    toast("👑 Victoire au score ! +50 pts bonus"); beep(988, .3);
+  }
+  checkAch();
+  await saveCloud(true);
+  renderFriseEnd(room);
 }
-function useLoupe(cur){
-  const ps=frise.powers[cur];
-  if(ps.loupe<=0){toast("Pas de loupe !");return;}
-  if(frise.sel===null){toast("Sélectionne une carte !");return;}
-  const e=frise.src[frise.hands[cur][frise.sel]];
+
+function renderFriseEnd(room) {
+  const sorted = room.placed.slice().sort((a, b) => a.e.y - b.e.y);
+  const ranking = room.players.slice().sort((a, b) => (room.roundPts[b] || 0) - (room.roundPts[a] || 0));
+  $("#friseBox").innerHTML = "<h1>" + (room.winner ? ("👑 Victoire de " + esc(room.winner) + " (" + fmt(room.roundPts[room.winner] || 0) + " pts) !") : "🤝 Partie terminée (0 pt)") + "</h1>"
+    + "<p class='mut'>Classement de la frise (100 pts par carte placée + 50 pts bonus vainqueur) :</p>"
+    + "<div class='card' style='background:var(--card2);margin:10px 0'>"
+    + ranking.map((n, idx) => "<div>" + (idx === 0 && room.winner === n ? "🥇 " : "🔹 ") + "<b>" + esc(n) + "</b> : " + fmt(room.roundPts[n] || 0) + " pts</div>").join("")
+    + "</div>"
+    + "<p class='mut'>Voici la frise complète dans l'ordre du temps :</p>"
+    + "<div class='tl'>" + sorted.map(pc => {
+      return "<div class='tl-card'><b>" + esc(pc.e.t) + "</b><div class='mut'>" + esc(pc.e.x) + "</div><div style='color:var(--gold);font-weight:700;margin-top:4px'>" + fmtYear(pc.e.y) + "</div></div>";
+    }).join("") + "</div>"
+    + "<div class='row' style='margin-top:12px'>"
+    + "<button class='btn gold' id='friseAgain'>🌐 Nouveau salon en ligne</button>"
+    + "<button class='btn' data-go='hist'>📜 Menu histoire</button></div>";
+  $("#friseAgain").onclick = () => createFriseRoom(room.players.length === 1);
+}
+
+async function useLoupeRoom(room, cur) {
+  const ps = room.powers[cur];
+  if (ps.loupe <= 0) { toast("Pas de loupe !"); return; }
+  if (room.sel === null) { toast("Sélectionne une carte !"); return; }
+  const e = room.src[room.hands[cur][room.sel]];
   ps.loupe--;
-  const dec=e.y<0?(Math.floor(Math.abs(e.y)/10)*10)+" av. J.-C.":(Math.floor(e.y/10)*10)+"";
-  toast("🔍 Cette carte se situe dans les années "+dec);
-  saveCloud(); renderFrise();
+  const dec = e.y < 0 ? (Math.floor(Math.abs(e.y) / 10) * 10) + " av. J.-C." : (Math.floor(e.y / 10) * 10) + "";
+  toast("🔍 Cette carte se situe dans les années " + dec);
+  await saveCloud(true);
+  renderFrise();
 }
-function useChance(cur){
-  const ps=frise.powers[cur];
-  if(ps.chance<=0){toast("Pas de chance !");return;}
-  if(frise.sel===null){toast("Sélectionne une carte !");return;}
+
+async function useChanceRoom(room, cur) {
+  const ps = room.powers[cur];
+  if (ps.chance <= 0) { toast("Pas de chance !"); return; }
+  if (room.sel === null) { toast("Sélectionne une carte !"); return; }
   ps.chance--;
-  frise.deck.unshift(frise.hands[cur][frise.sel]);
-  frise.hands[cur].splice(frise.sel,1);
-  frise.sel=null;
-  drawUp(cur);
+  room.deck.unshift(room.hands[cur][room.sel]);
+  room.hands[cur].splice(room.sel, 1);
+  room.sel = null;
+  drawUpRoom(room, cur);
   toast("🎲 Repioche gratuite !");
-  saveCloud(); renderFrise();
+  await saveCloud(true);
+  renderFrise();
 }
-function useSwap(cur){
-  if(frise.sel===null){toast("Sélectionne une carte à remettre !");return;}
-  if(frise.limits[cur]<=1){toast("Ta main max est déjà à 1 !");return;}
-  frise.limits[cur]--;
-  frise.deck.unshift(frise.hands[cur][frise.sel]);
-  frise.hands[cur].splice(frise.sel,1);
-  frise.sel=null;
-  drawUp(cur);
-  toast("🔄 Carte échangée ! Main max : "+frise.limits[cur]);
-  saveCloud(); renderFrise();
+
+async function useSwapRoom(room, cur) {
+  if (room.sel === null) { toast("Sélectionne une carte à remettre !"); return; }
+  if (room.limits[cur] <= 1) { toast("Ta main max est déjà à 1 !"); return; }
+  room.limits[cur]--;
+  room.deck.unshift(room.hands[cur][room.sel]);
+  room.hands[cur].splice(room.sel, 1);
+  room.sel = null;
+  drawUpRoom(room, cur);
+  toast("🔄 Carte échangée ! Main max : " + room.limits[cur]);
+  await saveCloud(true);
+  renderFrise();
 }
+
+/* ---- Défi quotidien « En quelle année ? » ---- */
+let HD=null;
+function histDailyQs(dk){
+  const rng=mulberry32(hashCode("hist-"+dk));
+  const picks=[], used={};
+  const d=new Date(), m=d.getMonth()+1, day=d.getDate();
+  const wikiToday=(WIKI.events||[]).filter(function(e){return e.year>0&&e.text.length<180;});
+  if(wikiToday.length){
+    const w=wikiToday[Math.floor(rng()*wikiToday.length)];
+    picks.push({y:w.year,t:"Ce jour-là ("+day+"/"+m+")",x:w.text}); used[w.year]=1;
+  }else{
+    const ep=EPHEM.filter(function(e){return e.m===m&&e.d===day;});
+    if(ep.length){
+      const match=EVENTS.filter(function(e){return ep[0].t.indexOf(String(Math.abs(e.y)))!==-1;})[0];
+      if(match){picks.push(match);used[match.i]=1;}
+    }
+  }
+  while(picks.length<5){
+    const e=EVENTS[Math.floor(rng()*EVENTS.length)];
+    if(!used[e.i]){used[e.i]=1;picks.push(e);}
+  }
+  return picks;
+}
+function startHistDaily(){
+  if(!requireProfile())return;
+  const dk=todayKey();
+  $("#hdBox").innerHTML="<h2>📅 Préparation du défi du jour…</h2><p class='mut'>Récupération de l'événement du jour sur Wikipédia…</p>";
+  show("histdaily");
+  const d=new Date();
+  const done=WIKI.events?Promise.resolve():fetch("https://fr.wikipedia.org/api/rest_v1/feed/onthisday/events/"+(d.getMonth()+1)+"/"+d.getDate())
+    .then(function(r){return r.json();})
+    .then(function(data){const evs=(data.events||[]).filter(function(e){return typeof e.year==="number"&&e.text&&e.text.length<200;});if(evs.length)WIKI.events=evs;})
+    .catch(function(){});
+  done.then(function(){HD={dk:dk,qs:histDailyQs(dk),idx:0,res:[]};renderHdQ();});
+}
+function renderHdQ(){
+  const e=HD.qs[HD.idx];
+  $("#hdBox").innerHTML="<div class='row'><span class='tag'>Question "+(HD.idx+1)+"/5</span><span class='spacer'></span><span class='tag'>En quelle année ?</span></div>"
+    +"<h2>"+esc(e.t)+"</h2><p class='mut'>"+esc(e.x)+"</p>"
+    +"<label>Année (négatif pour av. J.-C., par exemple -44)</label>"
+    +"<input id='hdYear' type='number' placeholder='Ex : 1789 ou -44'/>"
+    +"<div style='margin-top:10px'><button class='btn primary' id='hdGo'>Valider ➜</button></div>";
+  $("#hdGo").onclick=submitHd;
+  $("#hdYear").onkeydown=function(ev){if(ev.key==="Enter")submitHd();};
+}
+function submitHd(){
+  const raw=$("#hdYear").value.trim(); if(!raw)return;
+  const g=parseInt(raw,10); if(isNaN(g))return;
+  const e=HD.qs[HD.idx], diff=Math.abs(g-e.y);
+  let pts=0;
+  if(diff===0)pts=1000;
+  else if(diff<=5)pts=800;
+  else if(diff<=25)pts=500;
+  else if(diff<=100)pts=250;
+  else if(diff<=300)pts=100;
+  HD.res.push({e:e,g:g,diff:diff,pts:pts});
+  $("#hdBox").innerHTML="<div class='fb-title'>"+(diff===0?"🎯 Pile l'année !":pts?"✅ "+diff+" an(s) d'écart":"❌ "+diff+" an(s) d'écart")+"</div>"
+    +"<div class='fb-pts'>+"+fmt(pts)+" pts</div>"
+    +"<div class='mut'>Réponse : <b>"+fmtYear(e.y)+"</b> · Ta réponse : "+fmtYear(g)+"</div>"
+    +"<div style='margin-top:12px'><button class='btn primary' id='hdNext'>"+(HD.idx+1<5?"Suivante ➜":"Résultats 🏁")+"</button></div>";
+  beep(pts?740:200,.2);
+  $("#hdNext").onclick=function(){HD.idx++;if(HD.idx<5)renderHdQ();else finishHd();};
+}
+async function finishHd(){
+  const p=P(), h=ensureHist(p);
+  const tot=HD.res.reduce(function(s,r){return s+r.pts;},0);
+  const marks=HD.res.map(function(r){return r.diff===0?"🎯":r.pts?"🟩":"🟥";}).join("");
+  h.pts+=tot; h.daily[HD.dk]={score:tot,marks:marks};
+  if(h.last===yesterdayKey())h.streak++; else if(h.last!==HD.dk)h.streak=1;
+  h.last=HD.dk; if(h.streak>h.best)h.best=h.streak;
+  checkAch(); await saveCloud(true);
+  renderHistDailyDone({score:tot,marks:marks,res:HD.res});
+}
+function renderHistDailyDone(d){
+  $("#hdBox").innerHTML="<div style='text-align:center'><h1>📅 Défi du "+todayKey()+"</h1>"
+    +"<div class='big'>"+fmt(d.score)+" pts</div><div class='marks'>"+d.marks+"</div>"
+    +"<div style='margin-top:10px'><button class='btn gold' id='hdShare'>📋 Copier</button>"
+    +" <button class='btn' data-go='hist'>← Menu</button></div></div>"
+    +(d.res?d.res.map(function(r){return "<div class='row' style='padding:8px 0;border-bottom:1px solid var(--line)'><span><b>"+esc(r.e.t)+"</b> ("+fmtYear(r.e.y)+")</span><span class='spacer'></span><span class='mut'>"+fmtYear(r.g)+"</span> <b>+"+r.pts+"</b></div>";}).join(""):"");
+  if($("#hdShare"))$("#hdShare").onclick=function(){
+    const txt="📜 TerraChrono "+todayKey()+"\n"+d.marks+" — "+fmt(d.score)+" pts ("+P().name+")";
+    navigator.clipboard&&navigator.clipboard.writeText(txt).then(function(){toast("📋 Copié !");}).catch(function(){});
+  };
+}
+
+/* ================= TERRAQUIZ ================= */
+const QZ_Q=[
+{cat:"Culture",q:"Quel fleuve traverse Paris ?",c:["La Seine","La Loire","Le Rhône","La Garonne"],a:0,e:"La Seine traverse Paris sur 13 km et sépare la rive droite de la rive gauche."},
+{cat:"Culture",q:"Combien d'étoiles sur le drapeau de l'Union européenne ?",c:["12","15","27","28"],a:0,e:"Douze étoiles : symbole de perfection et d'unité, indépendamment du nombre d'États."},
+{cat:"Culture",q:"Quel est le plus grand océan du monde ?",c:["Pacifique","Atlantique","Indien","Arctique"],a:0,e:"L'océan Pacifique couvre environ un tiers de la surface du globe."},
+{cat:"Culture",q:"Quel pays a pour capitale Canberra ?",c:["Australie","Nouvelle-Zélande","Canada","Afrique du Sud"],a:0,e:"Canberra fut fondée en 1913 pour départager Sydney et Melbourne."},
+{cat:"Culture",q:"Quelle planète est la plus proche du Soleil ?",c:["Mercure","Vénus","Mars","Terre"],a:0,e:"Mercure boucle son orbite en seulement 88 jours terrestres."},
+{cat:"Culture",q:"De quel pays le sushi est-il originaire ?",c:["Japon","Chine","Corée","Thaïlande"],a:0,e:"Le sushi moderne est né à Edo (Tokyo) au début du XIXe siècle."},
+{cat:"Culture",q:"Qui a peint la Joconde ?",c:["Léonard de Vinci","Michel-Ange","Raphaël","Botticelli"],a:0,e:"Peinte entre 1503 et 1506, elle est conservée au Louvre."},
+{cat:"Culture",q:"En quelle année l'homme a-t-il marché sur la Lune ?",c:["1969","1967","1971","1973"],a:0,e:"Neil Armstrong a posé le pied sur la Lune le 20 juillet 1969."},
+{cat:"Sciences",q:"Quel est le symbole chimique de l'or ?",c:["Au","Ag","Fe","Pb"],a:0,e:"Au vient du latin « aurum »."},
+{cat:"Sciences",q:"Combien de paires de chromosomes possède un être humain ?",c:["23","22","24","46"],a:0,e:"23 paires, soit 46 chromosomes au total."},
+{cat:"Sciences",q:"Quelle est la vitesse de la lumière dans le vide ?",c:["300 000 km/s","30 000 km/s","3 000 km/s","150 000 km/s"],a:0,e:"Environ 299 792 km/s."},
+{cat:"Sciences",q:"Quel gaz forme environ 78 % de l'atmosphère terrestre ?",c:["Diazote","Dioxygène","Argon","CO2"],a:0,e:"Le diazote (N₂) constitue 78 % de l'air que nous respirons."},
+{cat:"Sciences",q:"Quel est l'os le plus long du corps humain ?",c:["Le fémur","Le tibia","L'humérus","Le radius"],a:0,e:"Il représente environ un quart de la taille d'un adulte."},
+{cat:"Sciences",q:"Quel organe produit l'insuline ?",c:["Le pancréas","Le foie","La rate","Les reins"],a:0,e:"Les îlots de Langerhans du pancréas sécrètent l'insuline."},
+{cat:"Cinéma",q:"Qui a réalisé « Pulp Fiction » ?",c:["Quentin Tarantino","Martin Scorsese","Steven Spielberg","Christopher Nolan"],a:0,e:"Palme d'or à Cannes en 1994."},
+{cat:"Cinéma",q:"Comment s'appelle le lionceau héros du « Roi Lion » ?",c:["Simba","Mufasa","Scar","Nala"],a:0,e:"« Simba » signifie « lion » en swahili."},
+{cat:"Cinéma",q:"Dans quel film entend-on « Je suis ton père » ?",c:["L'Empire contre-attaque","Un nouvel espoir","Le Retour du Jedi","La Menace fantôme"],a:0,e:"Épisode V, sorti en 1980."},
+{cat:"Cinéma",q:"Qui joue Jack Dawson dans « Titanic » ?",c:["Leonardo DiCaprio","Brad Pitt","Matt Damon","Johnny Depp"],a:0,e:"Sorti en 1997, le film a remporté 11 Oscars."},
+{cat:"Sport",q:"Combien de joueurs composent une équipe de football sur le terrain ?",c:["11","10","12","9"],a:0,e:"10 joueurs de champ plus un gardien de but."},
+{cat:"Sport",q:"Quel pays a remporté le plus de Coupes du monde de football ?",c:["Brésil","Allemagne","Italie","Argentine"],a:0,e:"Le Brésil en compte 5 (1958, 1962, 1970, 1994, 2002)."},
+{cat:"Sport",q:"Quelle distance court-on lors d'un marathon ?",c:["42,195 km","40 km","45 km","21,1 km"],a:0,e:"Fixée aux Jeux de Londres en 1908."},
+{cat:"Sport",q:"Combien de joueurs dans une équipe de basket-ball sur le terrain ?",c:["5","6","7","11"],a:0,e:"5 contre 5 sur le parquet."},
+{cat:"Jeux vidéo",q:"Quel est le nom du plombier héros de Nintendo ?",c:["Mario","Luigi","Wario","Sonic"],a:0,e:"Créé par Shigeru Miyamoto en 1981."},
+{cat:"Jeux vidéo",q:"Dans quel jeu construit-on avec des blocs cubiques ?",c:["Minecraft","Roblox","Terraria","Fortnite"],a:0,e:"Créé par Markus Persson (Notch) en 2009."},
+{cat:"Jeux vidéo",q:"Quelle couleur a Pac-Man ?",c:["Jaune","Rouge","Bleu","Vert"],a:0,e:"Inspiré par une pizza à laquelle il manque une part."},
+{cat:"Jeux vidéo",q:"Dans « The Legend of Zelda », qui est le héros jouable ?",c:["Link","Zelda","Ganon","Epona"],a:0,e:"Zelda est le nom de la princesse, pas du héros !"},
+{cat:"Animaux",q:"Quel est l'animal terrestre le plus rapide ?",c:["Le guépard","Le lion","La gazelle","L'autruche"],a:0,e:"Pointes à plus de 110 km/h sur de courtes distances."},
+{cat:"Animaux",q:"Combien de pattes possède une araignée ?",c:["8","6","10","12"],a:0,e:"Les arachnides ont 8 pattes, contrairement aux insectes qui en ont 6."},
+{cat:"Animaux",q:"Quel mammifère sait vraiment voler ?",c:["La chauve-souris","L'écureuil volant","Le lémurien","Le pingouin"],a:0,e:"Seuls les chiroptères pratiquent le vol battu."},
+{cat:"Animaux",q:"Combien de cœurs possède une pieuvre ?",c:["3","1","2","4"],a:0,e:"Deux cœurs pour les branchies et un pour le reste du corps."},
+{cat:"Insolite",q:"Quelle est la phobie des araignées ?",c:["Arachnophobie","Claustrophobie","Agoraphobie","Acrophobie"],a:0,e:"Du grec « arakhnê » (araignée)."},
+{cat:"Insolite",q:"Quel aliment ne périme pratiquement jamais ?",c:["Le miel","Le lait","Le pain","Le fromage"],a:0,e:"On a retrouvé du miel encore comestible dans des tombes égyptiennes."},
+{cat:"Insolite",q:"De quelle couleur est la boîte noire d'un avion ?",c:["Orange","Noire","Jaune","Blanche"],a:0,e:"Orange vif pour être repérée plus facilement dans les débris."},
+{cat:"Insolite",q:"Combien de touches compte un piano standard ?",c:["88","76","64","100"],a:0,e:"52 touches blanches et 36 touches noires."}
+];
+const QZ_D=[
+{a:"Ne plus jamais manger de pizza",b:"Ne plus jamais manger de chocolat",r:"Le dilemme sucré-salé classique : deux plaisirs quasi universels."},
+{a:"Pouvoir voler",b:"Pouvoir devenir invisible",r:"Le duel éternel des super-pouvoirs : liberté ou discrétion."},
+{a:"Vivre sans musique",b:"Vivre sans films ni séries",r:"Deux piliers de la culture, difficiles à départager."},
+{a:"Connaître la date de sa mort",b:"Connaître la cause de sa mort",r:"Dans les deux cas, difficile d'y penser sereinement."},
+{a:"Parler toutes les langues humaines",b:"Parler aux animaux",r:"Voyager sans barrière ou comprendre son chat."},
+{a:"Ne plus jamais avoir besoin de dormir",b:"Ne plus jamais avoir besoin de manger",r:"Gagner huit heures par jour ou économiser tout un budget."},
+{a:"Remonter 10 ans dans le passé avec tes souvenirs",b:"Aller 10 ans dans le futur",r:"Refaire ses choix ou découvrir la suite."},
+{a:"Avoir toujours 10 minutes de retard",b:"Avoir toujours 1 heure d'avance",r:"Attendre tout le monde ou se faire attendre par tout le monde."},
+{a:"Un hiver permanent",b:"Un été permanent",r:"Doudoune à vie ou ventilateur à vie."},
+{a:"Être célèbre et pauvre",b:"Être riche et totalement inconnu",r:"La tranquillité l'emporte souvent dans les sondages."}
+];
+const QZ_RANKS=[[0,"🌱 Novice"],[200,"🥉 Apprenti"],[600,"🥈 Curieux"],[1300,"🥇 Érudit"],[2500,"💎 Maître"],[5000,"👑 Légende"]];
+function qzRank(xp){let r=QZ_RANKS[0][1];QZ_RANKS.forEach(x=>{if(xp>=x[0])r=x[1];});return r;}
+function qzNext(xp){for(let i=0;i<QZ_RANKS.length;i++)if(QZ_RANKS[i][0]>xp)return QZ_RANKS[i];return null;}
+
+function ensureQz(p){
+  const dk=todayKey();
+  if(!p.qz)p.qz={xp:0,best:0,day:"",m:[0,0,0]};
+  if(p.qz.day!==dk){p.qz.day=dk;p.qz.m=[0,0,0];}
+  return p.qz;
+}
+function allQuizQ(){
+  const u=dbState.quizUser || [];
+  return QZ_Q.concat(u.map(x=>({cat:x.cat||"Joueurs",q:x.q,c:x.c,a:x.a,e:x.e||"",by:x.by})));
+}
+let QZ={mode:null,idx:0,score:0,streak:0,qs:[]};
+
+function renderQuiz(){
+  const p=P(), box=$("#quizBox");
+  if(!p){
+    box.innerHTML="<p class='mut'>Choisis un pseudo (en haut à droite) pour suivre tes XP et tes missions du jour.</p>"
+      +"<button class='btn primary' id='qzLogin'>Choisir un pseudo</button>";
+    $("#qzLogin").onclick=openProfileModal; return;
+  }
+  const q=ensureQz(p), nx=qzNext(q.xp), pct=nx?Math.min(100,Math.round(q.xp/nx[0]*100)):100;
+  const ms=[["Jouer 1 partie",q.m[0],1],["Faire 5 bonnes réponses",q.m[1],5],["Répondre à 1 dilemme",q.m[2],1]];
+  const cats=["Tout","Culture","Sciences","Cinéma","Sport","Jeux vidéo","Animaux","Insolite","Joueurs"];
+  box.innerHTML=
+    "<div class='card' style='background:var(--card2)'><div class='row'><b>"+qzRank(q.xp)+"</b><span class='spacer'></span>"
+    +"<span class='mut'>"+fmt(q.xp)+" XP"+(nx?" · prochain : "+nx[1]+" ("+fmt(nx[0])+")":"")+"</span></div>"
+    +"<div class='lvlbar'><i style='width:"+pct+"%'></i></div>"
+    +"<div class='mut' style='margin-top:6px'>Meilleure série : 🔥 <b>"+q.best+"</b></div></div>"
+    +"<h2>📋 Missions du jour</h2>"
+    +ms.map(m=>"<div class='row' style='margin:6px 0'><span>"+(m[1]>=m[2]?"✅":"⬜")+" "+m[0]+"</span><span class='spacer'></span><span class='mut'>"+Math.min(m[1],m[2])+"/"+m[2]+"</span></div>").join("")
+    +"<h2>🎮 Modes</h2><label>Thème du quiz (5 questions)</label>"
+    +"<div class='row'><select id='qzCat' style='flex:1'>"+cats.map(c=>"<option>"+c+"</option>").join("")+"</select>"
+    +"<button class='btn primary' id='qzStart'>Lancer le quiz ▶</button></div>"
+    +"<div class='row' style='margin-top:10px'><button class='btn gold' id='qzDil'>⚖️ Dilemmes</button>"
+    +"<button class='btn' id='qzAdd'>➕ Proposer une question en ligne</button></div>";
+  $("#qzStart").onclick=()=>startQzQuiz($("#qzCat").value);
+  $("#qzDil").onclick=()=>startQzDilemmas();
+  $("#qzAdd").onclick=openQzForm;
+}
+
+function startQzQuiz(cat){
+  let pool=allQuizQ().filter(x=>cat==="Tout"||x.cat===cat);
+  if(!pool.length)pool=allQuizQ();
+  const a=pool.slice();
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  QZ={mode:"quiz",idx:0,score:0,streak:0,qs:a.slice(0,5)};
+  renderQzStep();
+}
+function renderQzStep(){
+  const box=$("#quizBox");
+  if(QZ.idx>=QZ.qs.length){finishQzQuiz();return;}
+  const item=QZ.qs[QZ.idx];
+  const order=[0,1,2,3];
+  for(let i=3;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+  box.innerHTML="<div class='row'><span class='tag'>"+esc(item.cat)+"</span><span class='tag'>"+(QZ.idx+1)+"/"+QZ.qs.length+"</span>"
+    +"<span class='spacer'></span><span class='tag'>🔥 "+QZ.streak+"</span></div>"
+    +"<h2 style='margin-top:10px'>"+esc(item.q)+"</h2>"
+    +(item.by?"<div class='mut'>Proposée par "+esc(item.by)+"</div>":"")
+    +"<div style='margin-top:10px'>"+order.map(idx=>"<button class='btn' data-c='"+idx+"' style='display:block;width:100%;text-align:left;margin:8px 0'>"+esc(item.c[idx])+"</button>").join("")+"</div>"
+    +"<div id='qzFb' style='margin-top:10px'></div>";
+  box.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{
+    const pick=+b.dataset.c, ok=pick===item.a, p=P(), q=ensureQz(p);
+    box.querySelectorAll("[data-c]").forEach(x=>{
+      x.disabled=true;
+      if(+x.dataset.c===item.a)x.style.borderColor="var(--good)";
+      else if(x===b)x.style.borderColor="var(--bad)";
+    });
+    if(ok){
+      QZ.streak++; QZ.score++; q.m[1]++;
+      if(QZ.streak>q.best)q.best=QZ.streak;
+      const gain=20+Math.min(30,QZ.streak*5);
+      q.xp+=gain; p.points+=gain; p.totalPoints+=gain;
+      beep(740,.15);
+    }else{QZ.streak=0;beep(200,.2);}
+    saveCloud(true);
+    $("#qzFb").innerHTML="<div class='fb-title' style='color:"+(ok?"var(--good)":"var(--bad)")+"'>"+(ok?"✅ Bonne réponse !":"❌ Raté — c'était : "+esc(item.c[item.a]))+"</div>"
+      +(item.e?"<p class='mut'>💡 "+esc(item.e)+"</p>":"")
+      +"<button class='btn primary small' id='qzNext' style='margin-top:6px'>"+(QZ.idx+1<QZ.qs.length?"Suivante ➜":"Terminer 🏁")+"</button>";
+    $("#qzNext").onclick=()=>{QZ.idx++;renderQzStep();};
+  });
+}
+async function finishQzQuiz(){
+  const p=P(), q=ensureQz(p);
+  q.m[0]++;
+  await saveCloud(true);
+  $("#quizBox").innerHTML="<div style='text-align:center'><h1>🏁 Quiz terminé !</h1>"
+    +"<div class='big'>"+QZ.score+" / "+QZ.qs.length+"</div>"
+    +"<p class='mut'>Grade actuel : <b>"+qzRank(q.xp)+"</b> ("+fmt(q.xp)+" XP)</p>"
+    +"<div class='row' style='justify-content:center;margin-top:12px'>"
+    +"<button class='btn primary' id='qzAgain'>Rejouer</button>"
+    +"<button class='btn' id='qzBack'>← Menu TerraQuiz</button></div></div>";
+  $("#qzAgain").onclick=()=>startQzQuiz("Tout");
+  $("#qzBack").onclick=renderQuiz;
+}
+
+function startQzDilemmas(){
+  const a=QZ_D.slice();
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  QZ={mode:"dil",idx:0,qs:a.slice(0,5)};
+  renderQzDil();
+}
+function renderQzDil(){
+  const box=$("#quizBox");
+  if(QZ.idx>=QZ.qs.length){renderQuiz();toast("⚖️ Session dilemmes terminée !");return;}
+  const d=QZ.qs[QZ.idx];
+  box.innerHTML="<div class='row'><span class='tag'>⚖️ Dilemme "+(QZ.idx+1)+"/"+QZ.qs.length+"</span><span class='spacer'></span>"
+    +"<button class='btn small' id='qzQuit'>← Menu</button></div>"
+    +"<h2 style='margin-top:10px'>Tu préfères…</h2>"
+    +"<button class='btn' id='dA' style='display:block;width:100%;text-align:left;margin:8px 0'>🅰️ "+esc(d.a)+"</button>"
+    +"<button class='btn' id='dB' style='display:block;width:100%;text-align:left;margin:8px 0'>🅱️ "+esc(d.b)+"</button>"
+    +"<div id='dFb' style='margin-top:10px'></div>";
+  $("#qzQuit").onclick=renderQuiz;
+  const pick=async (which)=>{
+    $("#dA").disabled=true; $("#dB").disabled=true;
+    (which==="A"?$("#dA"):$("#dB")).style.borderColor="var(--acc)";
+    const h=hashCode(d.a+d.b), pA=35+(h%31), pB=100-pA;
+    const p=P(), q=ensureQz(p);
+    q.m[2]++; q.xp+=10; p.points+=10; p.totalPoints+=10;
+    await saveCloud(true);
+    $("#dFb").innerHTML="<div class='mut'>Tendance : <b>"+pA+"%</b> pour A · <b>"+pB+"%</b> pour B (+10 XP)</div>"
+      +"<p class='mut'>"+esc(d.r)+"</p>"
+      +"<button class='btn primary small' id='dNext'>Suivant ➜</button>";
+    $("#dNext").onclick=()=>{QZ.idx++;renderQzDil();};
+  };
+  $("#dA").onclick=()=>pick("A");
+  $("#dB").onclick=()=>pick("B");
+}
+
+function openQzForm(){
+  $("#quizBox").innerHTML="<h2>➕ Proposer une question en ligne</h2>"
+    +"<label>Catégorie</label><select id='qfCat'><option>Culture</option><option>Sciences</option><option>Cinéma</option><option>Sport</option><option>Jeux vidéo</option><option>Animaux</option><option>Insolite</option></select>"
+    +"<label>Question</label><input id='qfQ' placeholder='Ex : Quelle est la capitale du Pérou ?'/>"
+    +"<label>Bonne réponse</label><input id='qf0' placeholder='Lima'/>"
+    +"<label>Mauvaise réponse 1</label><input id='qf1' placeholder='Quito'/>"
+    +"<label>Mauvaise réponse 2</label><input id='qf2' placeholder='Bogota'/>"
+    +"<label>Mauvaise réponse 3</label><input id='qf3' placeholder='La Paz'/>"
+    +"<label>Explication (optionnel)</label><input id='qfE' placeholder='Fondée en 1535 par Francisco Pizarro.'/>"
+    +"<div class='row' style='margin-top:12px'><button class='btn primary' id='qfSave'>💾 Publier en ligne</button>"
+    +"<button class='btn' id='qfCancel'>Annuler</button></div>";
+  $("#qfCancel").onclick=renderQuiz;
+  $("#qfSave").onclick=async ()=>{
+    const q=$("#qfQ").value.trim(), c=[0,1,2,3].map(i=>$("#qf"+i).value.trim());
+    if(!q||c.some(x=>!x)){toast("Remplis la question et les 4 réponses !");return;}
+    if(!dbState.quizUser) dbState.quizUser = [];
+    dbState.quizUser.push({id:"qz_"+Date.now(),cat:$("#qfCat").value,q,c,a:0,e:$("#qfE").value.trim(),by:P().name});
+    await saveCloud(true);
+    toast("✅ Question publiée en ligne !"); renderQuiz();
+  };
+}
+
+/* ================= NAVIGATION & ÉVÉNEMENTS ================= */
+document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{
+  const g=b.dataset.go;
+  if(g==="home")renderHome();
+  if(g==="board")renderBoard("season");
+  if(g==="ach")renderAch();
+  if(g==="stats")renderStats();
+  if(g==="challenges")renderChallenges();
+  if(g==="hist")renderHist();
+  if(g==="quiz")renderQuiz();
+  show(g);
+});
+$("#homeBtn").onclick=()=>{renderHome();show("home");};
+$("#profileBtn").onclick=()=>openProfileModal();
+$("#helpBtn").onclick=openHelp;
+$("#adminResetBtn").onclick=openAdminModal;
+$("#hintBtn").onclick=useHint;
+$("#guessBtn").onclick=()=>submitGuess(false);
+$("#nextBtn").onclick=nextStep;
+$("#trStart").onclick=()=>startGame("training",trainingQuestions($("#trCat").value,+$("#trDiff").value));
+$("#createBtn").onclick=openCreator;
+$("#saveChallenge").onclick=saveNewChallenge;
+$("#importBtn").onclick=importChallenge;
+$("#refreshBoardBtn").onclick=()=>renderBoard(currentTab);
+$("#shareRoomBtn").onclick=()=>{
+  const url=location.href.split("#")[0];
+  navigator.clipboard?.writeText(url).then(()=>toast("🔗 Lien du jeu copié !")).catch(()=>toast("Lien prêt !"));
+};
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>renderBoard(b.dataset.tab));
+$("#modal").onclick=e=>{if(e.target===$("#modal"))e.target.classList.remove("open");};
 
 /* ================= BOOT ================= */
 async function boot(){
