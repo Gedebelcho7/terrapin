@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>🌍 TerraPin — Quiz géo en ligne &amp; Battle Royale</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/topojson-client@3"></script>
@@ -102,7 +103,7 @@
 </head>
 <body>
 <header>
-  <div class="logo">🌍 TerraPin <small><span class="online-indicator" id="syncDot"></span><span id="syncLabel">Connexion…</span></small></div>
+  <div class="logo">🌍 TerraPin <small><span class="online-indicator" id="syncDot"></span><span id="syncLabel">Synchronisation…</span></small></div>
   <div class="hright">
     <button class="chip" id="homeBtn" title="Retour à l'accueil">🏠</button>
     <span class="chip" id="seasonChip" title="Saison en cours">…</span>
@@ -128,7 +129,7 @@
       <div class="card"><h2>🛠️ Défis de joueurs</h2><p class="mut">Joue les défis en ligne des autres, crée les tiens, gagne des points d'auteur.</p>
         <button class="btn" data-go="challenges">Ouvrir</button></div>
       <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale (solo ou multi en ligne), défi quotidien Wikipédia.</p>
-        <button class="btn" id="goHistBtn">Entrer dans le temps</button></div>
+        <button class="btn" data-go="hist" id="goHistBtn">Entrer dans le temps</button></div>
       <div class="card"><h2>🏆 Classements &amp; Hall of Fame</h2><p class="mut">Jour, saison, all-time, Hall of Fame, Hall of Shame (les pls) et archives des vainqueurs.</p>
         <button class="btn" data-go="board">Voir</button></div>
       <div class="card"><h2>🎖️ Réussites &amp; Badges</h2><p class="mut" id="achCount"></p>
@@ -194,7 +195,7 @@
     <button class="btn small backbtn" data-go="home">← Retour</button>
     <div class="card" style="margin-top:52px">
       <h1>🏋️ Entraînement</h1>
-      <label>Catégorie</label>
+      <label for="trCat">Catégorie</label>
       <select id="trCat">
         <option value="all">🎲 Mélange (tout)</option>
         <option value="pays">🗺️ Pays</option>
@@ -208,7 +209,7 @@
         <option value="iles">🏝️ Îles</option>
         <option value="france">🇫🇷 Spécial France</option>
       </select>
-      <label>Difficulté</label>
+      <label for="trDiff">Difficulté</label>
       <select id="trDiff">
         <option value="0">🎲 Mélange</option>
         <option value="1">🟢 Facile — carte OSM complète, zoom large</option>
@@ -228,7 +229,7 @@
       <div class="row"><h1 style="margin:0">🛠️ Défis en ligne</h1><span class="spacer"></span>
         <button class="btn primary small" id="createBtn">+ Créer un défi</button></div>
       <p class="mut">Partagés en ligne avec tous les joueurs. Chaque partie jouée rapporte <b>+10 pts d'auteur</b>.</p>
-      <label>Importer un défi (coller un code)</label>
+      <label for="importCode">Importer un défi (coller un code)</label>
       <textarea id="importCode" placeholder="Colle un code de défi ici…"></textarea>
       <button class="btn small" id="importBtn" style="margin-top:6px">Importer</button>
     </div>
@@ -242,19 +243,19 @@
       <div id="cmap" style="flex:1"></div>
     </div>
     <div class="card">
-      <label>Titre du défi</label><input id="cTitle" placeholder="Ex : Trouve la plus vieille université d'Europe" />
-      <label>Consigne (ce que le joueur devra cliquer)</label><input id="cPrompt" placeholder="Ex : Clique sur la ville où la Magna Carta a été signée" />
+      <label for="cTitle">Titre du défi</label><input id="cTitle" placeholder="Ex : Trouve la plus vieille université d'Europe" />
+      <label for="cPrompt">Consigne (ce que le joueur devra cliquer)</label><input id="cPrompt" placeholder="Ex : Clique sur la ville où la Magna Carta a été signée" />
       <div class="row">
-        <div style="flex:1"><label>Catégorie</label>
+        <div style="flex:1"><label for="cCat">Catégorie</label>
           <select id="cCat"><option value="villes">🏙️ Villes</option><option value="pays">🗺️ Pays</option><option value="drapeaux">🏳️ Drapeaux</option><option value="images">🖼️ Images</option>
           <option value="montagnes">🏔️ Montagnes</option><option value="fleuves">🌊 Fleuves &amp; lacs</option>
           <option value="monuments">🗿 Monuments</option><option value="iles">🏝️ Îles</option>
           <option value="france">🇫🇷 France</option><option value="capitales">🏛️ Capitales</option></select></div>
-        <div style="flex:1"><label>Difficulté</label>
+        <div style="flex:1"><label for="cDiff">Difficulté</label>
           <select id="cDiff"><option value="1">🟢 Facile</option><option value="2">🟡 Moyen</option>
           <option value="3">🟠 Difficile</option><option value="4">🔴 Expert</option></select></div>
       </div>
-      <label>Indice optionnel</label><input id="cHint" placeholder="Ex : Île méditerranéenne, langue propre…" />
+      <label for="cHint">Indice optionnel</label><input id="cHint" placeholder="Ex : Île méditerranéenne, langue propre…" />
       <div class="mut" id="cPin" style="margin-top:8px">📍 Clique sur la carte pour placer le point.</div>
       <button class="btn primary" id="saveChallenge" style="margin-top:10px">💾 Publier le défi en ligne</button>
     </div>
@@ -361,7 +362,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 /* =========================================================================
-   🔥 CONFIGURATION FIREBASE (REMPLACE LES VALEURS CI-DESSOUS PAR LES TIENNES)
+   🔥 CONFIGURATION FIREBASE
    ========================================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyBdkugdU5p59ftou8Q1Jfw1X22HosAeNM8",
@@ -844,6 +845,11 @@ const EPHEM=[
 /* ================= FIREBASE CLOUD STATE & SYNC ================= */
 let dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {}, friseRooms: {}, resetEpoch: 0 };
 let currentUsername = localStorage.getItem("terrapin_current_user") || null;
+let deviceId = localStorage.getItem("terrapin_device_id");
+if (!deviceId) {
+  deviceId = "dev_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem("terrapin_device_id", deviceId);
+}
 let firestoreDb = null, firebaseAuth = null, stateDocRef = null, currentUid = null;
 let activeRoomId = null;
 
@@ -919,42 +925,62 @@ function mergeRemoteState(remote) {
   saveLocalFallback();
 }
 
-async function initCloudSync() {
-  if (firebaseConfig.apiKey === "REMPLACE_PAR_TON_API_KEY") {
-    setSyncStatus("offline", "Mode local (Config Firebase à remplir)");
+function initCloudSync() {
+  if (!firebaseConfig || firebaseConfig.apiKey === "REMPLACE_PAR_TON_API_KEY") {
+    setSyncStatus("offline", "Mode local");
     return;
   }
-  try {
-    const app = initializeApp(firebaseConfig);
-    firebaseAuth = getAuth(app);
-    firestoreDb = getFirestore(app);
-    const cred = await signInAnonymously(firebaseAuth);
-    currentUid = cred.user.uid;
-    stateDocRef = doc(firestoreDb, "terrapin", "global_state");
 
-    onSnapshot(stateDocRef, (snap) => {
-      setSyncStatus("online", "En ligne · Temps réel");
-      if (snap.exists()) {
-        mergeRemoteState(snap.data());
-        renderHome();
-        if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
-        if (document.querySelector("#screen-challenges.active")) renderChallenges();
-        if (document.querySelector("#screen-hist.active")) renderHist();
-        if (document.querySelector("#screen-frise.active") && activeRoomId) renderFrise();
-      } else {
-        setDoc(stateDocRef, dbState);
+  let syncResolved = false;
+  const safetyTimeout = setTimeout(() => {
+    if (!syncResolved) {
+      setSyncStatus("offline", "Mode local (hors-ligne)");
+    }
+  }, 4000);
+
+  (async () => {
+    try {
+      const app = initializeApp(firebaseConfig);
+      firebaseAuth = getAuth(app);
+      firestoreDb = getFirestore(app);
+      try {
+        const cred = await signInAnonymously(firebaseAuth);
+        currentUid = cred.user.uid;
+      } catch (authErr) {
+        console.warn("Auth anonyme ignorée:", authErr);
       }
-    }, (err) => {
-      console.warn("Erreur Firestore:", err);
+      stateDocRef = doc(firestoreDb, "terrapin", "global_state");
+
+      onSnapshot(stateDocRef, (snap) => {
+        syncResolved = true;
+        clearTimeout(safetyTimeout);
+        setSyncStatus("online", "En ligne · Temps réel");
+        if (snap.exists()) {
+          mergeRemoteState(snap.data());
+          renderHome();
+          if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
+          if (document.querySelector("#screen-challenges.active")) renderChallenges();
+          if (document.querySelector("#screen-hist.active")) renderHist();
+          if (document.querySelector("#screen-frise.active") && activeRoomId) renderFrise();
+        } else {
+          setDoc(stateDocRef, dbState).catch(() => {});
+        }
+      }, (err) => {
+        syncResolved = true;
+        clearTimeout(safetyTimeout);
+        console.warn("Erreur Firestore:", err);
+        setSyncStatus("offline", "Hors-ligne (sauvegarde locale)");
+      });
+    } catch (e) {
+      syncResolved = true;
+      clearTimeout(safetyTimeout);
+      console.warn("Firebase init erreur:", e);
       setSyncStatus("offline", "Hors-ligne (sauvegarde locale)");
-    });
-  } catch (e) {
-    console.warn("Firebase init erreur:", e);
-    setSyncStatus("offline", "Hors-ligne (sauvegarde locale)");
-  }
+    }
+  })();
 }
 
-async function saveCloud(immediate = false) {
+async function saveCloud() {
   saveLocalFallback();
   if (!stateDocRef) return;
   try {
@@ -968,12 +994,6 @@ function P() {
   if (!currentUsername) return null;
   const p = dbState.profiles[currentUsername];
   if (!p) {
-    currentUsername = null;
-    localStorage.removeItem("terrapin_current_user");
-    return null;
-  }
-  // Vérifie que le profil appartient bien à cet appareil / navigateur
-  if (p.ownerUid && currentUid && p.ownerUid !== currentUid) {
     currentUsername = null;
     localStorage.removeItem("terrapin_current_user");
     return null;
@@ -1007,31 +1027,37 @@ function getProfileList() {
 function openProfileModal(force) {
   const profiles = getProfileList();
   const me = P();
-  const myProfiles = profiles.filter(p => !p.ownerUid || !currentUid || p.ownerUid === currentUid);
+  const myDeviceProfiles = profiles.filter(p => p.deviceId === deviceId);
+  const otherProfiles = profiles.filter(p => p.deviceId !== deviceId);
 
   let html = "<h2>👤 Ton compte joueur</h2>";
   if (me) {
     html += "<div class='card' style='background:var(--card2);margin:8px 0'><b>Connecté : " + esc(me.name) + (isAdmin() ? " 👑 (Admin)" : "") + "</b>"
       + "<div class='mut'>" + fmt(me.points) + " pts saison · " + fmt(me.totalPoints) + " pts général</div>"
-      + "<button class='btn small danger' id='logoutBtn' style='margin-top:8px'>🚪 Se déconnecter</button></div>";
+      + "<button class='btn small danger' id='logoutBtn' style='margin-top:8px'>🚪 Changer de compte / Déconnecter</button></div>";
   }
 
-  if (myProfiles.length > 0 && !me) {
-    html += "<label>Reprendre ton compte sur cet appareil</label><div class='row' style='margin-bottom:10px'>";
-    myProfiles.forEach(p => {
-      html += "<button class='btn small' data-pick='" + esc(p.name) + "'>" + esc(p.name) + " (" + fmt(p.points) + " pts)</button>";
+  if (myDeviceProfiles.length > 0) {
+    html += "<div style='margin-top:10px'><div class='mut' style='margin-bottom:6px'>📱 Tes comptes sur cet appareil :</div><div class='row'>";
+    myDeviceProfiles.forEach(p => {
+      const isCur = me && me.name === p.name;
+      html += "<button class='btn small " + (isCur ? "primary" : "") + "' data-pick='" + esc(p.name) + "'>" + esc(p.name) + " (" + fmt(p.points) + " pts)</button>";
     });
-    html += "</div>";
+    html += "</div></div>";
   }
 
-  html += "<label>Créer un nouveau pseudo unique</label>"
+  if (otherProfiles.length > 0) {
+    html += "<div style='margin-top:12px'><div class='mut' style='margin-bottom:6px'>🌐 Autres comptes existants (cliquer pour se connecter) :</div><div class='row'>";
+    otherProfiles.forEach(p => {
+      const isCur = me && me.name === p.name;
+      html += "<button class='btn small " + (isCur ? "primary" : "") + "' data-pick='" + esc(p.name) + "'>" + esc(p.name) + " (" + fmt(p.points) + " pts)</button>";
+    });
+    html += "</div></div>";
+  }
+
+  html += "<label for='newName'>Ou créer un nouveau pseudo unique</label>"
     + "<div class='row'><input id='newName' maxlength='22' placeholder='Ton pseudo unique…'/>"
     + "<button class='btn primary' id='addName'>Créer</button></div>";
-
-  if (profiles.length > 0) {
-    html += "<div style='margin-top:14px'><div class='mut'>Joueurs inscrits en ligne (" + profiles.length + ") :</div>"
-      + "<div class='mut' style='font-size:.78rem;margin-top:4px'>" + profiles.map(p => esc(p.name)).join(" · ") + "</div></div>";
-  }
 
   if (!force) {
     html += "<div style='margin-top:14px;text-align:right'><button class='btn small' id='closeModal'>Fermer</button></div>";
@@ -1044,17 +1070,22 @@ function openProfileModal(force) {
     $("#logoutBtn").onclick = () => {
       currentUsername = null;
       localStorage.removeItem("terrapin_current_user");
-      $("#modal").classList.remove("open");
       renderHome();
       openProfileModal(true);
     };
   }
 
-  $("#modalBox").querySelectorAll("[data-pick]").forEach(b => b.onclick = () => {
-    currentUsername = b.dataset.pick;
+  $("#modalBox").querySelectorAll("[data-pick]").forEach(b => b.onclick = async () => {
+    const pickedName = b.dataset.pick;
+    currentUsername = pickedName;
     localStorage.setItem("terrapin_current_user", currentUsername);
+    if (dbState.profiles[pickedName]) {
+      dbState.profiles[pickedName].deviceId = deviceId;
+      await saveCloud();
+    }
     $("#modal").classList.remove("open");
     renderHome();
+    toast("✅ Connecté en tant que " + pickedName);
   });
 
   $("#addName").onclick = async () => {
@@ -1062,13 +1093,14 @@ function openProfileModal(force) {
     if (!n) return;
     const exists = Object.keys(dbState.profiles).find(k => k.toLowerCase() === n.toLowerCase());
     if (exists) {
-      toast("❌ Ce pseudo est déjà pris par un autre joueur !");
+      toast("❌ Ce pseudo existe déjà ! Clique dessus au-dessus pour le reprendre.");
       return;
     }
     const isFirst = Object.keys(dbState.profiles).length === 0;
     dbState.profiles[n] = {
       name: n,
-      ownerUid: currentUid || ("local_" + Date.now()),
+      deviceId: deviceId,
+      ownerUid: currentUid || deviceId,
       isAdmin: isFirst,
       created: Date.now(),
       points: 0,
@@ -1095,7 +1127,7 @@ function openProfileModal(force) {
     };
     currentUsername = n;
     localStorage.setItem("terrapin_current_user", n);
-    await saveCloud(true);
+    await saveCloud();
     $("#modal").classList.remove("open");
     renderHome();
     toast("Bienvenue " + n + " !" + (isFirst ? " (Tu es l'Admin 👑)" : ""));
@@ -1139,7 +1171,7 @@ function openAdminModal() {
       winner.seasonWins = (winner.seasonWins || 0) + 1;
     }
     Object.values(dbState.profiles).forEach(prof => { prof.points = 0; });
-    await saveCloud(true);
+    await saveCloud();
     $("#modal").classList.remove("open");
     renderHome();
     toast("🏆 Saison clôturée et vainqueur archivé !");
@@ -1150,7 +1182,7 @@ function openAdminModal() {
     dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {}, friseRooms: {}, resetEpoch: newEpoch };
     currentUsername = null;
     localStorage.removeItem("terrapin_current_user");
-    await saveCloud(true);
+    await saveCloud();
     $("#modal").classList.remove("open");
     renderHome();
     openProfileModal(true);
@@ -1166,12 +1198,14 @@ const TILES={
   sat:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","&copy; Esri"]
 };
 function setBase(kind){
+  if(!map) return;
   if(baseLayer)map.removeLayer(baseLayer);
   const t=TILES[kind]||TILES.osm;
   baseLayer=L.tileLayer(t[0],{attribution:t[1],maxZoom:18,noWrap:true}).addTo(map);
 }
 function clearMarkers(){gameMarkers.forEach(m=>map.removeLayer(m));gameMarkers=[];}
 function initMap(){
+  if(typeof L === "undefined") return;
   map=L.map("map",{center:[20,0],zoom:2,minZoom:2,maxZoom:10,worldCopyJump:false,
     maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1});
   setBase("osm");
@@ -1224,7 +1258,7 @@ function startGame(mode,questions,meta){
   loadBorders();
   GAME={mode,questions,meta:meta||{},idx:0,results:[],guess:null,locked:false,hinted:false};
   show("game");
-  setTimeout(()=>{map.invalidateSize();loadQuestion();},60);
+  setTimeout(()=>{if(map)map.invalidateSize();loadQuestion();},60);
 }
 function loadQuestion(){
   stopTimer();
@@ -1254,8 +1288,10 @@ function loadQuestion(){
       .catch(()=>{});
   }else{fl.classList.add("hidden");fl.removeAttribute("src");}
   setBase(cfg.base);
-  map.setMinZoom(cfg.zoom[0]); map.setMaxZoom(cfg.zoom[1]);
-  map.setView([20,0],2);
+  if(map){
+    map.setMinZoom(cfg.zoom[0]); map.setMaxZoom(cfg.zoom[1]);
+    map.setView([20,0],2);
+  }
   GAME.maxTime=cfg.timer; GAME.timeLeft=cfg.timer;
   $("#timerBar").style.width="100%";
   timerInt=setInterval(()=>{
@@ -1271,10 +1307,12 @@ function useHint(){
   GAME.hinted=true; $("#hintBtn").disabled=true;
   const text=q.hint||autoHint(q);
   toast("💡 "+text);
-  map.setMaxZoom(Math.min(12,map.getMaxZoom()+2));
-  const jit=(Math.random()-.5)*4;
-  const c=L.circle([q.lat+jit,q.lon+jit],{radius:DIFF[q.diff].tol*1800,color:"#fbbf24",fillOpacity:.06,weight:1}).addTo(map);
-  gameMarkers.push(c);
+  if(map){
+    map.setMaxZoom(Math.min(12,map.getMaxZoom()+2));
+    const jit=(Math.random()-.5)*4;
+    const c=L.circle([q.lat+jit,q.lon+jit],{radius:DIFF[q.diff].tol*1800,color:"#fbbf24",fillOpacity:.06,weight:1}).addTo(map);
+    gameMarkers.push(c);
+  }
 }
 function autoHint(q){
   const ns=q.lat>=0?"hémisphère Nord":"hémisphère Sud";
@@ -1293,15 +1331,17 @@ function submitGuess(timedOut){
   const sc=GAME.guess?scoreQuestion(q,dist,GAME.hinted,Math.max(0,GAME.timeLeft),GAME.maxTime):{pts:0,hit:false,perfect:false,plse:true};
   GAME.results.push({q,dist:Math.round(dist),pts:sc.pts,hit:sc.hit,perfect:sc.perfect,plse:sc.plse,timedOut:!!timedOut});
 
-  map.setMaxZoom(12);
-  const target=L.circleMarker([q.lat,q.lon],{radius:9,color:"#34d399",fillColor:"#34d399",fillOpacity:.9}).addTo(map);
-  const tolRing=L.circle([q.lat,q.lon],{radius:DIFF[q.diff].tol*1000,color:"#22d3ee",fillOpacity:.05,weight:1,dashArray:"4 4"}).addTo(map);
-  gameMarkers.push(target,tolRing);
-  if(GAME.guess){
-    const line=L.polyline([[GAME.guess.lat,GAME.guess.lng],[q.lat,q.lon]],{color:"#fbbf24",weight:2,dashArray:"6 6"}).addTo(map);
-    gameMarkers.push(line);
-    map.fitBounds(L.latLngBounds([[GAME.guess.lat,GAME.guess.lng],[q.lat,q.lon]]),{padding:[60,60],maxZoom:7});
-  }else{map.setView([q.lat,q.lon],5);}
+  if(map){
+    map.setMaxZoom(12);
+    const target=L.circleMarker([q.lat,q.lon],{radius:9,color:"#34d399",fillColor:"#34d399",fillOpacity:.9}).addTo(map);
+    const tolRing=L.circle([q.lat,q.lon],{radius:DIFF[q.diff].tol*1000,color:"#22d3ee",fillOpacity:.05,weight:1,dashArray:"4 4"}).addTo(map);
+    gameMarkers.push(target,tolRing);
+    if(GAME.guess){
+      const line=L.polyline([[GAME.guess.lat,GAME.guess.lng],[q.lat,q.lon]],{color:"#fbbf24",weight:2,dashArray:"6 6"}).addTo(map);
+      gameMarkers.push(line);
+      map.fitBounds(L.latLngBounds([[GAME.guess.lat,GAME.guess.lng],[q.lat,q.lon]]),{padding:[60,60],maxZoom:7});
+    }else{map.setView([q.lat,q.lon],5);}
+  }
 
   $("#fbTitle").textContent=timedOut?"⏱️ Temps écoulé !":sc.perfect?"🎯 Pile dessus !":sc.hit?"✅ Dans la zone !":sc.plse?"💀 EN PLS TOTALE !":"❌ Hors zone";
   $("#fbPts").textContent="+"+fmt(sc.pts)+" pts";
@@ -1366,7 +1406,7 @@ async function finishGame(){
     }
   }
   const newly=checkAch();
-  await saveCloud(true);
+  await saveCloud();
 
   $("#resTitle").textContent=GAME.mode==="daily"?"Défi du "+dk:GAME.mode==="challenge"?"Défi : "+(GAME.meta.title||""):"Entraînement terminé";
   $("#resScore").textContent=fmt(total)+" pts" + (GAME.mode==="training" ? " (Entraînement)" : "");
@@ -1420,7 +1460,7 @@ function openCreator(){
   cpin=null;
   show("create");
   setTimeout(()=>{
-    if(!cmap){
+    if(!cmap && typeof L !== "undefined"){
       cmap=L.map("cmap",{center:[25,10],zoom:2,minZoom:2,maxZoom:12,maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1});
       L.tileLayer(TILES.osm[0],{attribution:TILES.osm[1],noWrap:true}).addTo(cmap);
       cmap.on("click",e=>{
@@ -1430,7 +1470,7 @@ function openCreator(){
         $("#cPin").textContent="📍 Point placé : "+e.latlng.lat.toFixed(3)+", "+e.latlng.lng.toFixed(3);
       });
     }
-    cmap.invalidateSize();
+    if(cmap) cmap.invalidateSize();
   },60);
 }
 async function saveNewChallenge(){
@@ -1441,7 +1481,7 @@ async function saveNewChallenge(){
   dbState.challenges[id]={id,title,prompt,cat:$("#cCat").value,diff:+$("#cDiff").value,
     hint:$("#cHint").value.trim(),lat:+cpin.lat.toFixed(4),lon:+cpin.lng.toFixed(4),author:p.name,plays:0,best:null};
   checkAch();
-  await saveCloud(true);
+  await saveCloud();
   toast("💾 Défi publié en ligne !");
   renderChallenges(); show("challenges");
 }
@@ -1455,7 +1495,7 @@ async function importChallenge(){
     if(!c.title||!c.prompt||typeof c.lat!=="number")throw 0;
     c.id=c.id||"imp-"+Date.now().toString(36);
     dbState.challenges[c.id]=c;
-    await saveCloud(true);
+    await saveCloud();
     $("#importCode").value=""; toast("Défi importé !"); renderChallenges();
   }catch(e){toast("Code invalide");}
 }
@@ -1484,14 +1524,14 @@ function show(name){
   stopTimer();
   stopFriseTimer();
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
-  $("#screen-"+name).classList.add("active");
+  const target = $("#screen-"+name);
+  if(target) target.classList.add("active");
 }
 function renderHome(){
   const p=P(), si=seasonInfo(), dk=todayKey();
   $("#seasonChip").textContent="Saison "+si.n+" (J"+si.day+"/28)";
   $("#homeDate").textContent="📅 "+new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
   
-  // Alerte en direct sur l'accueil si c'est ton tour dans une Frise en ligne
   const banner = $("#homeFriseBanner");
   if (banner) {
     const rooms = Object.values(dbState.friseRooms || {});
@@ -1539,7 +1579,7 @@ function renderHome(){
     $("#homeStreak").textContent="🔥 Série : 0 j";
     $("#achCount").textContent="0 / "+ACHS.length+" débloquées";
     $("#adminCard").style.display = "none";
-    $("#dailyStatus").textContent="Crée ton compte joueur pour commencer";
+    $("#dailyStatus").textContent="Crée ou choisis ton compte joueur pour commencer";
     $("#dailyBtn").textContent="Choisir mon pseudo ➜";
     $("#dailyBtn").onclick=()=>openProfileModal(true);
   }
@@ -1637,7 +1677,7 @@ function renderStats(){
 
 function openHelp(){
   $("#modalBox").innerHTML="<h2>❓ Comment jouer</h2>"
-    +"<p class='mut'>• <b>Compte unique en ligne :</b> ton pseudo est protégé par ton appareil et synchronisé en temps réel sur Firebase.</p>"
+    +"<p class='mut'>• <b>Compte joueur en ligne :</b> clique sur ton bouton profil en haut à droite pour créer ton pseudo ou reprendre ton compte existant.</p>"
     +"<p class='mut'>• <b>Défi du jour :</b> 5 questions identiques pour tous les joueurs chaque jour, avec zoom limité et temps compté. Compte pour le classement de la saison.</p>"
     +"<p class='mut'>• <b>Entraînement :</b> libre et illimité, mais les points ne comptent pas dans le classement de la saison.</p>"
     +"<p class='mut'>• <b>Score Géo :</b> jusqu'à 1 000 pts selon ta précision, +250 pts bonus rapidité, +150 pts si tu es pile dessus. Indice : -30 %. Plus de 2500 km = une PLS 💀 !</p>"
@@ -1664,7 +1704,6 @@ function renderHist(){
     createFriseRoom(true);
   };
 
-  // Liste des parties de Frise en ligne
   const rList = $("#friseRoomsList");
   if (rList) {
     const rooms = Object.values(dbState.friseRooms || {}).filter(r => r.status !== "over" || (Date.now() - (r.updatedAt || 0) < 300000));
@@ -1803,7 +1842,6 @@ async function createFriseRoom(isSolo) {
   const id = "room_" + Date.now() + "_" + Math.floor(Math.random() * 999);
   if (!dbState.friseRooms) dbState.friseRooms = {};
   
-  // Nettoie les vieilles parties terminées de plus d'1h
   Object.keys(dbState.friseRooms).forEach(k => {
     if (Date.now() - (dbState.friseRooms[k].updatedAt || 0) > 3600000) delete dbState.friseRooms[k];
   });
@@ -1838,7 +1876,7 @@ async function createFriseRoom(isSolo) {
   if (isSolo) {
     await startFriseRoom(id);
   } else {
-    await saveCloud(true);
+    await saveCloud();
     renderFrise();
     toast("🌐 Salon créé ! En attente d'autres joueurs…");
   }
@@ -1854,7 +1892,7 @@ async function joinFriseRoom(id) {
   if (!room.players.includes(p.name)) {
     room.players.push(p.name);
     room.updatedAt = Date.now();
-    await saveCloud(true);
+    await saveCloud();
   }
   activeRoomId = id;
   show("frise");
@@ -1894,7 +1932,7 @@ async function startFriseRoom(id) {
   });
   
   checkAch();
-  await saveCloud(true);
+  await saveCloud();
   renderFrise();
 }
 
@@ -1925,10 +1963,10 @@ function renderFrise() {
   
   if (!room) {
     $("#friseBox").innerHTML = "<h2>Partie introuvable</h2><button class='btn' data-go='hist'>← Retour</button>";
+    $("#friseBox").querySelector("[data-go]").onclick = () => { renderHist(); show("hist"); };
     return;
   }
 
-  // ÉCRAN DE LOBBY (EN ATTENTE DES JOUEURS)
   if (room.status === "waiting") {
     const isHost = me === room.host;
     $("#friseBox").innerHTML = "<h2>🌐 Salon en ligne de " + esc(room.host) + "</h2>"
@@ -1955,7 +1993,8 @@ function renderFrise() {
         room.players = room.players.filter(x => x !== me);
       }
       activeRoomId = null;
-      await saveCloud(true);
+      await saveCloud();
+      renderHist();
       show("hist");
     };
     return;
@@ -2112,7 +2151,7 @@ async function nextTurnRoom(room) {
   room.sel = null;
   room.updatedAt = Date.now();
   checkAch();
-  await saveCloud(true);
+  await saveCloud();
   renderFrise();
 }
 
@@ -2121,7 +2160,6 @@ async function endFriseRoom(room) {
   room.status = "over";
   room.updatedAt = Date.now();
   
-  // Le gagnant est celui qui a cumulé le plus de points sur la frise !
   let bestScore = -1;
   let winner = null;
   room.players.forEach(n => {
@@ -2144,7 +2182,7 @@ async function endFriseRoom(room) {
     toast("👑 Victoire au score ! +50 pts bonus"); beep(988, .3);
   }
   checkAch();
-  await saveCloud(true);
+  await saveCloud();
   renderFriseEnd(room);
 }
 
@@ -2162,8 +2200,9 @@ function renderFriseEnd(room) {
     }).join("") + "</div>"
     + "<div class='row' style='margin-top:12px'>"
     + "<button class='btn gold' id='friseAgain'>🌐 Nouveau salon en ligne</button>"
-    + "<button class='btn' data-go='hist'>📜 Menu histoire</button></div>";
+    + "<button class='btn' id='friseBackHist'>📜 Menu histoire</button></div>";
   $("#friseAgain").onclick = () => createFriseRoom(room.players.length === 1);
+  $("#friseBackHist").onclick = () => { renderHist(); show("hist"); };
 }
 
 async function useLoupeRoom(room, cur) {
@@ -2174,7 +2213,7 @@ async function useLoupeRoom(room, cur) {
   ps.loupe--;
   const dec = e.y < 0 ? (Math.floor(Math.abs(e.y) / 10) * 10) + " av. J.-C." : (Math.floor(e.y / 10) * 10) + "";
   toast("🔍 Cette carte se situe dans les années " + dec);
-  await saveCloud(true);
+  await saveCloud();
   renderFrise();
 }
 
@@ -2188,7 +2227,7 @@ async function useChanceRoom(room, cur) {
   room.sel = null;
   drawUpRoom(room, cur);
   toast("🎲 Repioche gratuite !");
-  await saveCloud(true);
+  await saveCloud();
   renderFrise();
 }
 
@@ -2201,7 +2240,7 @@ async function useSwapRoom(room, cur) {
   room.sel = null;
   drawUpRoom(room, cur);
   toast("🔄 Carte échangée ! Main max : " + room.limits[cur]);
-  await saveCloud(true);
+  await saveCloud();
   renderFrise();
 }
 
@@ -2244,7 +2283,7 @@ function renderHdQ(){
   const e=HD.qs[HD.idx];
   $("#hdBox").innerHTML="<div class='row'><span class='tag'>Question "+(HD.idx+1)+"/5</span><span class='spacer'></span><span class='tag'>En quelle année ?</span></div>"
     +"<h2>"+esc(e.t)+"</h2><p class='mut'>"+esc(e.x)+"</p>"
-    +"<label>Année (négatif pour av. J.-C., par exemple -44)</label>"
+    +"<label for='hdYear'>Année (négatif pour av. J.-C., par exemple -44)</label>"
     +"<input id='hdYear' type='number' placeholder='Ex : 1789 ou -44'/>"
     +"<div style='margin-top:10px'><button class='btn primary' id='hdGo'>Valider ➜</button></div>";
   $("#hdGo").onclick=submitHd;
@@ -2275,15 +2314,16 @@ async function finishHd(){
   h.pts+=tot; h.daily[HD.dk]={score:tot,marks:marks};
   if(h.last===yesterdayKey())h.streak++; else if(h.last!==HD.dk)h.streak=1;
   h.last=HD.dk; if(h.streak>h.best)h.best=h.streak;
-  checkAch(); await saveCloud(true);
+  checkAch(); await saveCloud();
   renderHistDailyDone({score:tot,marks:marks,res:HD.res});
 }
 function renderHistDailyDone(d){
   $("#hdBox").innerHTML="<div style='text-align:center'><h1>📅 Défi du "+todayKey()+"</h1>"
     +"<div class='big'>"+fmt(d.score)+" pts</div><div class='marks'>"+d.marks+"</div>"
     +"<div style='margin-top:10px'><button class='btn gold' id='hdShare'>📋 Copier</button>"
-    +" <button class='btn' data-go='hist'>← Menu</button></div></div>"
+    +" <button class='btn' id='hdBackBtn'>← Menu</button></div></div>"
     +(d.res?d.res.map(function(r){return "<div class='row' style='padding:8px 0;border-bottom:1px solid var(--line)'><span><b>"+esc(r.e.t)+"</b> ("+fmtYear(r.e.y)+")</span><span class='spacer'></span><span class='mut'>"+fmtYear(r.g)+"</span> <b>+"+r.pts+"</b></div>";}).join(""):"");
+  if($("#hdBackBtn")) $("#hdBackBtn").onclick = () => { renderHist(); show("hist"); };
   if($("#hdShare"))$("#hdShare").onclick=function(){
     const txt="📜 TerraChrono "+todayKey()+"\n"+d.marks+" — "+fmt(d.score)+" pts ("+P().name+")";
     navigator.clipboard&&navigator.clipboard.writeText(txt).then(function(){toast("📋 Copié !");}).catch(function(){});
@@ -2372,7 +2412,7 @@ function renderQuiz(){
     +"<div class='mut' style='margin-top:6px'>Meilleure série : 🔥 <b>"+q.best+"</b></div></div>"
     +"<h2>📋 Missions du jour</h2>"
     +ms.map(m=>"<div class='row' style='margin:6px 0'><span>"+(m[1]>=m[2]?"✅":"⬜")+" "+m[0]+"</span><span class='spacer'></span><span class='mut'>"+Math.min(m[1],m[2])+"/"+m[2]+"</span></div>").join("")
-    +"<h2>🎮 Modes</h2><label>Thème du quiz (5 questions)</label>"
+    +"<h2>🎮 Modes</h2><label for='qzCat'>Thème du quiz (5 questions)</label>"
     +"<div class='row'><select id='qzCat' style='flex:1'>"+cats.map(c=>"<option>"+c+"</option>").join("")+"</select>"
     +"<button class='btn primary' id='qzStart'>Lancer le quiz ▶</button></div>"
     +"<div class='row' style='margin-top:10px'><button class='btn gold' id='qzDil'>⚖️ Dilemmes</button>"
@@ -2416,7 +2456,7 @@ function renderQzStep(){
       q.xp+=gain; p.points+=gain; p.totalPoints+=gain;
       beep(740,.15);
     }else{QZ.streak=0;beep(200,.2);}
-    saveCloud(true);
+    saveCloud();
     $("#qzFb").innerHTML="<div class='fb-title' style='color:"+(ok?"var(--good)":"var(--bad)")+"'>"+(ok?"✅ Bonne réponse !":"❌ Raté — c'était : "+esc(item.c[item.a]))+"</div>"
       +(item.e?"<p class='mut'>💡 "+esc(item.e)+"</p>":"")
       +"<button class='btn primary small' id='qzNext' style='margin-top:6px'>"+(QZ.idx+1<QZ.qs.length?"Suivante ➜":"Terminer 🏁")+"</button>";
@@ -2426,7 +2466,7 @@ function renderQzStep(){
 async function finishQzQuiz(){
   const p=P(), q=ensureQz(p);
   q.m[0]++;
-  await saveCloud(true);
+  await saveCloud();
   $("#quizBox").innerHTML="<div style='text-align:center'><h1>🏁 Quiz terminé !</h1>"
     +"<div class='big'>"+QZ.score+" / "+QZ.qs.length+"</div>"
     +"<p class='mut'>Grade actuel : <b>"+qzRank(q.xp)+"</b> ("+fmt(q.xp)+" XP)</p>"
@@ -2460,7 +2500,7 @@ function renderQzDil(){
     const h=hashCode(d.a+d.b), pA=35+(h%31), pB=100-pA;
     const p=P(), q=ensureQz(p);
     q.m[2]++; q.xp+=10; p.points+=10; p.totalPoints+=10;
-    await saveCloud(true);
+    await saveCloud();
     $("#dFb").innerHTML="<div class='mut'>Tendance : <b>"+pA+"%</b> pour A · <b>"+pB+"%</b> pour B (+10 XP)</div>"
       +"<p class='mut'>"+esc(d.r)+"</p>"
       +"<button class='btn primary small' id='dNext'>Suivant ➜</button>";
@@ -2472,13 +2512,13 @@ function renderQzDil(){
 
 function openQzForm(){
   $("#quizBox").innerHTML="<h2>➕ Proposer une question en ligne</h2>"
-    +"<label>Catégorie</label><select id='qfCat'><option>Culture</option><option>Sciences</option><option>Cinéma</option><option>Sport</option><option>Jeux vidéo</option><option>Animaux</option><option>Insolite</option></select>"
-    +"<label>Question</label><input id='qfQ' placeholder='Ex : Quelle est la capitale du Pérou ?'/>"
-    +"<label>Bonne réponse</label><input id='qf0' placeholder='Lima'/>"
-    +"<label>Mauvaise réponse 1</label><input id='qf1' placeholder='Quito'/>"
-    +"<label>Mauvaise réponse 2</label><input id='qf2' placeholder='Bogota'/>"
-    +"<label>Mauvaise réponse 3</label><input id='qf3' placeholder='La Paz'/>"
-    +"<label>Explication (optionnel)</label><input id='qfE' placeholder='Fondée en 1535 par Francisco Pizarro.'/>"
+    +"<label for='qfCat'>Catégorie</label><select id='qfCat'><option>Culture</option><option>Sciences</option><option>Cinéma</option><option>Sport</option><option>Jeux vidéo</option><option>Animaux</option><option>Insolite</option></select>"
+    +"<label for='qfQ'>Question</label><input id='qfQ' placeholder='Ex : Quelle est la capitale du Pérou ?'/>"
+    +"<label for='qf0'>Bonne réponse</label><input id='qf0' placeholder='Lima'/>"
+    +"<label for='qf1'>Mauvaise réponse 1</label><input id='qf1' placeholder='Quito'/>"
+    +"<label for='qf2'>Mauvaise réponse 2</label><input id='qf2' placeholder='Bogota'/>"
+    +"<label for='qf3'>Mauvaise réponse 3</label><input id='qf3' placeholder='La Paz'/>"
+    +"<label for='qfE'>Explication (optionnel)</label><input id='qfE' placeholder='Fondée en 1535 par Francisco Pizarro.'/>"
     +"<div class='row' style='margin-top:12px'><button class='btn primary' id='qfSave'>💾 Publier en ligne</button>"
     +"<button class='btn' id='qfCancel'>Annuler</button></div>";
   $("#qfCancel").onclick=renderQuiz;
@@ -2487,31 +2527,79 @@ function openQzForm(){
     if(!q||c.some(x=>!x)){toast("Remplis la question et les 4 réponses !");return;}
     if(!dbState.quizUser) dbState.quizUser = [];
     dbState.quizUser.push({id:"qz_"+Date.now(),cat:$("#qfCat").value,q,c,a:0,e:$("#qfE").value.trim(),by:P().name});
-    await saveCloud(true);
+    await saveCloud();
     toast("✅ Question publiée en ligne !"); renderQuiz();
   };
 }
 
-/* ================= NAVIGATION & ÉVÉNEMENTS ================= */
-document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{
-  const g=b.dataset.go;
-  if(g==="home")renderHome();
-  if(g==="board")renderBoard("season");
-  if(g==="ach")renderAch();
-  if(g==="stats")renderStats();
-  if(g==="challenges")renderChallenges();
-  if(g==="quiz")renderQuiz();
-  show(g);
-});
+/* ================= NAVIGATION & ÉVÉNEMENTS (IMMÉDIAT ET NON BLOQUANT) ================= */
+function bindEvents() {
+  document.querySelectorAll("[data-go]").forEach(b => {
+    b.onclick = () => {
+      const g = b.dataset.go;
+      if (g === "home") renderHome();
+      if (g === "board") renderBoard("season");
+      if (g === "ach") renderAch();
+      if (g === "stats") renderStats();
+      if (g === "challenges") renderChallenges();
+      if (g === "quiz") renderQuiz();
+      if (g === "hist") renderHist();
+      show(g);
+    };
+  });
 
-// Liaison directe et explicite pour le bouton TerraChrono
-const goHistBtn = $("#goHistBtn");
-if(goHistBtn) {
-  goHistBtn.onclick = () => {
-    renderHist();
-    show("hist");
-  };
+  if ($("#goHistBtn")) {
+    $("#goHistBtn").onclick = () => {
+      renderHist();
+      show("hist");
+    };
+  }
+
+  if ($("#homeBtn")) $("#homeBtn").onclick = () => { renderHome(); show("home"); };
+  if ($("#profileBtn")) $("#profileBtn").onclick = () => openProfileModal(false);
+  if ($("#adminResetBtn")) $("#adminResetBtn").onclick = () => openAdminModal();
+  if ($("#helpBtn")) $("#helpBtn").onclick = () => openHelp();
+  if ($("#guessBtn")) $("#guessBtn").onclick = () => submitGuess(false);
+  if ($("#hintBtn")) $("#hintBtn").onclick = () => useHint();
+  if ($("#nextBtn")) $("#nextBtn").onclick = () => nextStep();
+  if ($("#trStart")) $("#trStart").onclick = () => startGame("training", trainingQuestions($("#trCat").value, +$("#trDiff").value));
+  if ($("#createBtn")) $("#createBtn").onclick = () => openCreator();
+  if ($("#saveChallenge")) $("#saveChallenge").onclick = () => saveNewChallenge();
+  if ($("#importBtn")) $("#importBtn").onclick = () => importChallenge();
+
+  document.querySelectorAll(".tab").forEach(b => {
+    b.onclick = () => renderBoard(b.dataset.tab);
+  });
+
+  if ($("#refreshBoardBtn")) {
+    $("#refreshBoardBtn").onclick = () => {
+      renderBoard(currentTab);
+      toast("🔄 Classement actualisé !");
+    };
+  }
+
+  if ($("#shareRoomBtn")) {
+    $("#shareRoomBtn").onclick = () => {
+      const url = window.location.href;
+      navigator.clipboard?.writeText(url).then(() => toast("🔗 Lien copié ! Envoie-le à tes amis.")).catch(() => toast("Partage l'URL de ta barre d'adresse !"));
+    };
+  }
+
+  if ($("#modal")) {
+    $("#modal").onclick = (e) => {
+      if (e.target.id === "modal" && P()) {
+        $("#modal").classList.remove("open");
+      }
+    };
+  }
 }
 
-$("#homeBtn").onclick=()=>{renderHome();show("home");};
-// ... existing code ... -->
+/* ================= INITIALISATION IMMÉDIATE ================= */
+loadLocalFallback();
+bindEvents();
+initMap();
+renderHome();
+initCloudSync();
+</script>
+</body>
+</html>
