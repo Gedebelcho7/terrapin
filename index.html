@@ -1636,90 +1636,117 @@ function submitAnswer(timeout){
   } else map.setView([q.lat,q.lon],Math.min(cfg.zoom[1],5));
   const label=prec>=1?"🎯 Parfait !":prec>=.9?"🔥 Presque parfait":prec>=.6?"👍 Pas mal":answered?"😅 À côté…":"💀 Sans réponse";
   $("#fbTitle").textContent=label;
-  $("#fbPts").textContent="+"+fmt(pts)+" pts";
-  const inBorder=answered&&dist===0&&(q.cat==="pays"||q.cat==="drapeaux");
-  const zpen=(game.zoomBase&&game.maxZoom>game.zoomBase)?Math.round((1-Math.max(0.6,1-0.05*(game.maxZoom-game.zoomBase)))*100):0;
-  $("#fbDist").textContent=answered?(inBorder?"🎯 Dans les frontières !":"Distance : "+fmt(Math.round(dist))+" km"
-    +(game.hintUsed?" · indice utilisé (-30 %)":"")+(zpen?" · zoom utilisé (-"+zpen+" %)":"")):"Temps écoulé sans réponse.";
-  const reveal=q.flag?("🏳️ C'était : "+q.name):(q.wiki?("📸 C'était : "+q.wiki):"");
-  $("#fbFact").textContent=(reveal?reveal+" · ":"")+(q.fact?("🌍 Le savais-tu ? "+q.fact):"");
-  $("#nextBtn").textContent=(game.i+1<game.questions.length)?"Suivante ➜":"Terminer 🏁";
+  $("#fbPts").textContent="+"+fmt(pts)+" pts"+(game.combo>1?" · série ×"+game.combo+" 🔥":"");
+  $("#fbDist").textContent=answered?(dist===0?"Dans le pays ! · ":Math.round(dist)+" km · ")+Math.round(prec*100)+" % de précision":"Temps écoulé";
+  $("#fbFact").textContent=q.fact?"🌍 "+q.fact:"";
+  $("#nextBtn").textContent=game.i+1<game.questions.length?"Suivante ➜":"Voir les résultats 🏁";
   $("#feedback").classList.remove("hidden");
-  beep(prec>=.6?740:220,.22);
-  saveCloud();
+  $("#qSession").textContent="Session : "+fmt(game.sessionPts)+" pts";
+  beep(prec>=.6?660:220,.2);
+  checkAch();
 }
+
 function nextQuestion(){
-  $("#feedback").classList.add("hidden");
   game.i++;
-  if(game.i<game.questions.length){loadQuestion();return;}
-  finishGame();
+  if(game.i<game.questions.length)loadQuestion();
+  else finishGame();
 }
+
 function finishGame(){
-  const p=P(); if(!p){show("home");return;}
-  const total=game.results.reduce(function(s,r){return s+r.pts;},0);
-  const marks=game.results.map(function(r){return r.mark;}).join("");
-  let title="Résultat", sub="";
-  const si=seasonInfo();
-  
-  if(game.mode==="daily"){
-    const dk=todayKey();
-    const first=!(p.daily[dk]&&p.daily[dk].done);
-    if(first){
-      if(p.lastDaily===yesterdayKey())p.streak++; else if(p.lastDaily!==dk)p.streak=1;
-      p.lastDaily=dk;
-    }
-    p.daily[dk]={score:Math.max(total,(p.daily[dk]&&p.daily[dk].score)||0),marks:marks,done:true,
-      results:game.results.map(function(r){return {t:r.q.prompt,d:r.dist,p:r.pts};})};
-    
-    if(first){
-      p.points+=total;
-      p.seasonPts[si.n]=(p.seasonPts[si.n]||0)+total;
-      p.seasonDays = p.seasonDays || {};
-      p.seasonDays[si.n] = p.seasonDays[si.n] || [];
-      if(!p.seasonDays[si.n].includes(dk)){
-        p.seasonDays[si.n].push(dk);
+  const p=P(), total=game.sessionPts, marks=game.results.map(function(r){return r.mark;}).join("");
+  const elapsedSec=(Date.now()-(game.startTime||Date.now()))/1000;
+  if(p){
+    if(game.mode==="daily"){
+      const dk=todayKey(), si=seasonInfo();
+      const first=!(p.daily[dk]&&p.daily[dk].done);
+      if(first){
+        if(p.lastDaily===yesterdayKey())p.streak++; else if(p.lastDaily!==dk)p.streak=1;
+        p.lastDaily=dk;
       }
-    }
-    p.bestDaily=Math.max(p.bestDaily,p.daily[dk].score);
-    title="🎯 Défi du jour";
-    sub=first?("Série : "+p.streak+" jour"+(p.streak>1?"s":"")+" 🔥"):"Déjà joué aujourd'hui : pas de points en plus.";
-  } else if(game.mode==="training"){
-    const banked=Math.round(total*0.25);
-    p.trainPts=(p.trainPts||0)+banked;
-    title="🏋️ Entraînement terminé";
-    sub=fmt(total)+" pts en session · "+fmt(banked)+" bankés (entraînement à part)";
-  } else if(game.mode==="challenge"){
-    p.points+=total;
-    const ch=dbState.challenges[game.challengeId];
-    if(ch){
-      const already=p.playedCh[game.challengeId];
-      if(!already){
-        p.playedCh[game.challengeId]={dist:game.results[0]?game.results[0].dist:null,pts:total};
+      p.daily[dk]={score:Math.max(total,(p.daily[dk]&&p.daily[dk].score)||0),marks:marks,done:true};
+      if(first){
+        p.points+=total;
+        p.seasonPts[si.n]=(p.seasonPts[si.n]||0)+total;
+        (p.seasonDays[si.n]=p.seasonDays[si.n]||[]).push(dk);
+      }
+      p.bestDaily=Math.max(p.bestDaily,p.daily[dk].score);
+    } else if(game.mode==="challenge"&&game.challengeId){
+      if(elapsedSec<10&&total>0)p.speedrun=true;
+      const ch=dbState.challenges[game.challengeId];
+      if(ch&&ch.author!==p.name&&!p.playedCh[game.challengeId]){
+        p.playedCh[game.challengeId]={score:total,rated:false};
+        p.points+=total;
+        const si=seasonInfo(); p.seasonPts[si.n]=(p.seasonPts[si.n]||0)+total;
         ch.plays=(ch.plays||0)+1;
-        if(ch.author!==p.name){const au=dbState.profiles[ch.author];if(au)au.authorPts=(au.authorPts||0)+10;}
+        const au=dbState.profiles[ch.author];
+        if(au){au.authorPts=(au.authorPts||0)+10;au.points+=10;}
       }
+    } else if(game.mode==="training"){
+      p.trainPts=(p.trainPts||0)+total;
     }
-    if(game.startTime && (Date.now() - game.startTime < 10000)) p.speedrun = true;
-    title="🛠️ Défi terminé";
-    sub=ch?("Défi de "+ch.author):"";
+    checkAch(); saveCloud();
   }
-  checkAch(); saveCloud();
-  $("#resTitle").textContent=title;
+  $("#resTitle").textContent=game.mode==="daily"?"🎯 Défi du jour terminé":game.mode==="challenge"?"🛠️ Défi terminé":"🏋️ Entraînement terminé";
   $("#resScore").textContent=fmt(total)+" pts";
   $("#resMarks").textContent=marks;
-  $("#resSub").textContent=sub;
+  $("#resSub").textContent=game.mode==="daily"?(p?"Série : "+p.streak+" jour"+(p.streak>1?"s":"")+" 🔥":"")
+    :game.mode==="training"?"Entraînement : points ajoutés à ton compteur d'entraînement (hors classement saison)."
+    :"Merci d'avoir joué ce défi en ligne !";
   $("#resDetail").innerHTML=game.results.map(function(r){
-    return "<div style='padding:8px 0;border-bottom:1px solid var(--line)'>"
-    +"<span style='font-size:1.2rem'>"+r.mark+"</span> "+esc(r.q.prompt)
-    +"<span class='mut'> · "+(r.dist!=null?fmt(Math.round(r.dist))+" km":"—")+" · <b>"+fmt(r.pts)+" pts</b></span></div>";}).join("");
-  window._lastShare={marks:marks,total:total,mode:game.mode};
+    return "<div style='padding:8px 0;border-bottom:1px solid var(--line)'><span style='font-size:1.2rem'>"+r.mark+"</span> "+esc(r.q.prompt)
+    +" <span class='mut'>· "+(r.dist===null?"temps écoulé":r.dist===0?"dans le pays":Math.round(r.dist)+" km")+" · "+fmt(r.pts)+" pts</span></div>";
+  }).join("");
+  window._lastShare={mode:game.mode,total:total,marks:marks};
   show("result");
 }
 
-/* ================= PARTAGE ================= */
+/* ================= PARTAGE & ACCUEIL ================= */
+function fallbackCopy(txt, cb){
+  const ta=document.createElement("textarea");
+  ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); if(cb)cb(); }catch(e){ toast("Impossible de copier"); }
+  document.body.removeChild(ta);
+}
+
 $("#shareBtn").addEventListener("click",function(){
   const s=window._lastShare; if(!s)return;
+  const p=P();
+  const txt="🌍 TerraPin · "+todayKey()+"\n"+(s.mode==="daily"?"Défi du jour":"Mode "+s.mode)+" · "+fmt(s.total)+" pts\n"+s.marks+(p?"\nSérie : "+p.streak+" j 🔥":"")+"\n#TerraPin";
+  const done=function(){toast("Fiche copiée ! 📋");};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(function(){fallbackCopy(txt,done);});
+  else fallbackCopy(txt,done);
+});
+
+$("#dailyBtn").addEventListener("click",function(){
+  if(!requireProfile())return;
+  const p=P(), dk=todayKey();
+  if(p.daily[dk]&&p.daily[dk].done){
+    currentTab="day"; show("board"); renderBoard("day");
+    return;
+  }
+  startGame(buildDaily(),"daily");
+});
+
+$("#adminResetBtn").addEventListener("click",function(){
+  if(!isAdmin()){toast("Accès réservé à l'administrateur.");return;}
   const si=seasonInfo();
+  let opts="<option value='current'>🏅 Remettre à zéro uniquement la Saison "+si.n+" (en cours)</option>"
+    +"<option value='all'>🗑️ TOUT remettre à zéro (tous les points, stats, saisons, défis)</option>";
+  for(let k=1;k<si.n;k++){
+    opts+="<option value='season_"+k+"'>📜 Archiver et remettre à zéro la Saison "+k+"</option>";
+  }
+  $("#modalBox").innerHTML="<h2>⚙️ Administration &amp; Saisons</h2>"
+    +"<p class='mut'>Action synchronisée en temps réel sur tous les postes connectés.</p>"
+    +"<label>Choisir l'action de réinitialisation</label>"
+    +"<select id='adminResetChoice'>"+opts+"</select>"
+    +"<div class='row' style='margin-top:14px'>"
+    +"<button class='btn danger' id='doResetConfirm'>Exécuter la remise à zéro</button>"
+    +"<span class='spacer'></span>"
+    +"<button class='btn' id='closeModal'>Annuler</button>"
+    +"</div>";
+  $("#modal").classList.add("open");
+
   $("#doResetConfirm").onclick=async function(){
     if(!isAdmin()){toast("Action non autorisée.");return;}
     const choice = $("#adminResetChoice").value;
@@ -1757,6 +1784,44 @@ $("#shareBtn").addEventListener("click",function(){
     renderHome();
   };
   $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
+});
+
+function renderHome(){
+  const p=P(), si=seasonInfo(), dk=todayKey();
+  $("#seasonChip").textContent="Saison "+si.n+" (J"+si.day+"/28)";
+  $("#homeDate").textContent="📅 "+new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+  if(p){
+    $("#profileBtn").textContent="👤 "+p.name+(isAdmin()?" 👑":"")+" · "+fmt(p.points)+" pts";
+    $("#homeStreak").textContent="🔥 Série : "+p.streak+" j";
+    const unCount=Object.keys(p.ach||{}).length;
+    $("#achCount").textContent=unCount+" / "+ALLACH.length+" badges débloqués";
+    const done=p.daily[dk]&&p.daily[dk].done;
+    if(done){
+      $("#dailyStatus").textContent=fmt(p.daily[dk].score)+" pts · "+p.daily[dk].marks;
+      $("#dailyBtn").textContent="Voir le classement du jour ➜";
+    } else {
+      $("#dailyStatus").textContent="Prêt à jouer !";
+      $("#dailyBtn").textContent="Jouer ➜";
+    }
+  } else {
+    $("#profileBtn").textContent="👤 Connexion / Créer";
+    $("#homeStreak").textContent="🔥 Série : 0 j";
+    $("#achCount").textContent="0 / "+ALLACH.length+" badges débloqués";
+    $("#dailyStatus").textContent="Connecte-toi pour jouer";
+    $("#dailyBtn").textContent="Créer mon compte ➜";
+  }
+  const adm=$("#adminCard");
+  if(adm) adm.style.display=isAdmin()?"block":"none";
+
+  const dayPlayers=Object.values(dbState.profiles).filter(function(x){return x.daily[dk]&&x.daily[dk].done;})
+    .sort(function(a,b){return b.daily[dk].score-a.daily[dk].score;});
+  if(dayPlayers.length){
+    $("#dailyMini").innerHTML="<div class='mut'><b>🏆 Top du jour :</b> "+dayPlayers.slice(0,3).map(function(x,i){
+      return (i+1)+". "+esc(x.name)+" ("+fmt(x.daily[dk].score)+" pts)";
+    }).join(" · ")+"</div>";
+  } else {
+    $("#dailyMini").innerHTML="";
+  }
 }
 
 function levelOf(p){return Math.floor(Math.sqrt(Math.max(0,p.points)/400))+1;}
