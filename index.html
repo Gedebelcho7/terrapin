@@ -813,49 +813,129 @@ const EPHEM=[
 ];
 
 /* ================= FIREBASE CLOUD STATE & SYNC ================= */
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'terrapin-online-default';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'terrapin-online-github-v1';
+const defaultFirebaseConfig = {
+  apiKey: "AIzaSyDummyPublicKeyForDemoSync",
+  authDomain: "terrapin-sync.firebaseapp.com",
+  projectId: "terrapin-sync"
+};
+const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') 
+  ? JSON.parse(__firebase_config) 
+  : null;
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined;
+
+// Salon public partagé par défaut (permet de se voir sur GitHub Pages via API REST JSONBin/KV ou Firebase)
+const SYNC_ROOM_KEY = "terrapin_global_room_v1";
+const SYNC_API_URL = "https://kvdb.io/A2x9kLmPqR7vT4wN8zB3cF/" + SYNC_ROOM_KEY;
 
 let dbState = { profiles: {}, challenges: {}, quizUser: [] };
 let currentUsername = localStorage.getItem("terrapin_current_user") || null;
 let firestoreDb = null, firebaseAuth = null, stateDocRef = null;
+let useRestFallback = false;
+
+function mergeStates(remote) {
+  if (!remote) return;
+  if (remote.profiles) {
+    Object.keys(remote.profiles).forEach(k => {
+      const rp = remote.profiles[k];
+      const lp = dbState.profiles[k];
+      if (!lp || (rp.points || 0) >= (lp.points || 0) || (rp.stats && lp.stats && rp.stats.answered >= lp.stats.answered)) {
+        dbState.profiles[k] = rp;
+      }
+    });
+  }
+  if (remote.challenges) {
+    dbState.challenges = Object.assign({}, dbState.challenges, remote.challenges);
+  }
+  if (remote.quizUser && Array.isArray(remote.quizUser)) {
+    const ids = new Set((dbState.quizUser || []).map(x => x.id));
+    remote.quizUser.forEach(q => {
+      if (!ids.has(q.id)) {
+        dbState.quizUser.push(q);
+        ids.add(q.id);
+      }
+    });
+  }
+}
+
+async function pollRestSync() {
+  try {
+    const res = await fetch(SYNC_API_URL + "?t=" + Date.now());
+    if (res.ok) {
+      const remote = await res.json();
+      mergeStates(remote);
+      localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
+      if (currentUsername && dbState.profiles[currentUsername]) {
+        renderHome();
+        if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
+        if (document.querySelector("#screen-challenges.active")) renderChallenges();
+      }
+    }
+  } catch (e) {
+    console.debug("REST poll error:", e);
+  }
+}
+
+async function pushRestSync() {
+  try {
+    // Pull latest before pushing to avoid overwriting friend's data
+    const res = await fetch(SYNC_API_URL + "?t=" + Date.now());
+    if (res.ok) {
+      const remote = await res.json();
+      mergeStates(remote);
+    }
+    await fetch(SYNC_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dbState)
+    });
+  } catch (e) {
+    console.debug("REST push error:", e);
+  }
+}
 
 async function initCloudSync(){
-  try {
-    const app = initializeApp(firebaseConfig);
-    firebaseAuth = getAuth(app);
-    firestoreDb = getFirestore(app);
+  if (firebaseConfig && firebaseConfig.projectId) {
+    try {
+      const app = initializeApp(firebaseConfig);
+      firebaseAuth = getAuth(app);
+      firestoreDb = getFirestore(app);
 
-    if (initialAuthToken) {
-      await signInWithCustomToken(firebaseAuth, initialAuthToken);
-    } else {
-      await signInAnonymously(firebaseAuth);
-    }
+      if (initialAuthToken) {
+        await signInWithCustomToken(firebaseAuth, initialAuthToken);
+      } else {
+        await signInAnonymously(firebaseAuth);
+      }
 
-    stateDocRef = doc(firestoreDb, 'artifacts', appId, 'public', 'data', 'terrapin_main_state');
-    
-    onSnapshot(stateDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const remote = docSnap.data();
-        if (remote && remote.profiles) {
-          dbState = remote;
+      stateDocRef = doc(firestoreDb, 'artifacts', appId, 'public', 'data', 'terrapin_main_state');
+      
+      onSnapshot(stateDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const remote = docSnap.data();
+          mergeStates(remote);
           if (currentUsername && dbState.profiles[currentUsername]) {
             renderHome();
             if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
           }
+        } else {
+          setDoc(stateDocRef, dbState);
         }
-      } else {
-        // Init remote state if empty
-        setDoc(stateDocRef, dbState);
-      }
-    }, (error) => {
-      console.debug("Firestore sync notice:", error);
-    });
-  } catch(e) {
-    console.debug("Cloud fallback to local cache:", e);
-    loadLocalFallback();
+      }, (error) => {
+        console.debug("Firestore sync notice, switching to REST:", error);
+        startRestMode();
+      });
+      return;
+    } catch(e) {
+      console.debug("Firebase unavailable on external host, switching to REST sync");
+    }
   }
+  startRestMode();
+}
+
+function startRestMode() {
+  useRestFallback = true;
+  pollRestSync();
+  setInterval(pollRestSync, 6000); // Synchronisation automatique toutes les 6 secondes
 }
 
 function loadLocalFallback(){
@@ -869,8 +949,10 @@ async function saveCloud(){
   try {
     localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
     if (currentUsername) localStorage.setItem("terrapin_current_user", currentUsername);
-    if (firestoreDb && stateDocRef && firebaseAuth && firebaseAuth.currentUser) {
+    if (!useRestFallback && firestoreDb && stateDocRef && firebaseAuth && firebaseAuth.currentUser) {
       await setDoc(stateDocRef, dbState);
+    } else {
+      await pushRestSync();
     }
   } catch(e) {
     console.debug("Save cloud err:", e);
