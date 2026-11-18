@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>🌍 TerraPin — Quiz géo en ligne</title>
+<title>🌍 TerraPin — Quiz géo en ligne &amp; Battle Royale</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/topojson-client@3"></script>
@@ -78,7 +78,7 @@
     align-items:center; justify-content:center; padding:16px}
   #modal.open{display:flex}
   .modal-box{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:20px;
-    max-width:460px; width:100%; max-height:85vh; overflow:auto}
+    max-width:480px; width:100%; max-height:85vh; overflow:auto}
   #toast{position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:3000; display:none;
     background:linear-gradient(90deg,var(--acc),var(--acc2)); color:#081018; font-weight:800;
     padding:10px 18px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.5)}
@@ -128,16 +128,16 @@
         <button class="btn" data-go="challenges">Ouvrir</button></div>
       <div class="card"><h2>📜 TerraChrono</h2><p class="mut">Frise chronologique en battle royale (solo ou multi sans blocage), défi quotidien Wikipédia.</p>
         <button class="btn" data-go="hist">Entrer dans le temps</button></div>
-      <div class="card"><h2>🏆 Classements</h2><p class="mut">Jour, saison avec stats de participation (jours joués), général, créateurs.</p>
+      <div class="card"><h2>🏆 Classements &amp; Hall of Fame</h2><p class="mut">Jour, saison, all-time, Hall of Fame, Hall of Shame (les pls) et archives des vainqueurs.</p>
         <button class="btn" data-go="board">Voir</button></div>
-      <div class="card"><h2>🎖️ Réussites</h2><p class="mut" id="achCount"></p>
+      <div class="card"><h2>🎖️ Réussites &amp; Badges</h2><p class="mut" id="achCount"></p>
         <button class="btn" data-go="ach">Voir</button></div>
-      <div class="card"><h2>📊 Stats</h2><p class="mut">Précision par catégorie, distance moyenne, tout est tracé.</p>
+      <div class="card"><h2>📊 Stats &amp; Taux de réussite</h2><p class="mut">Taux de réussite détaillé par catégorie, précision, moyenne d'erreur, tout est tracé.</p>
         <button class="btn" data-go="stats">Voir</button></div>
       <div class="card"><h2>🎯 TerraQuiz</h2><p class="mut">Quiz et dilemmes en ligne, missions du jour, grades du Novice au Légende.</p>
         <button class="btn" data-go="quiz">Ouvrir</button></div>
       <div class="card" id="adminCard" style="display:none"><h2>⚙️ Administration</h2><p class="mut">Réservé à l'admin (premier joueur créé).</p>
-        <button class="btn danger small" id="adminResetBtn">🗑️ Remettre à zéro</button></div>
+        <button class="btn danger small" id="adminResetBtn">🗑️ Remettre à zéro / Saisons</button></div>
       <div class="card"><h2>❓ Comment jouer</h2><p class="mut">Règles, score, saisons, défis.</p>
         <button class="btn" id="helpBtn">Lire</button></div>
     </div>
@@ -308,10 +308,13 @@
   <section id="screen-board" class="screen">
     <button class="btn small backbtn" data-go="home">← Retour</button>
     <div class="card" style="margin-top:52px">
-      <div class="row">
+      <div class="row" style="flex-wrap:wrap">
         <button class="btn small tab" data-tab="day">📅 Aujourd'hui</button>
         <button class="btn small tab" data-tab="season">🏅 Saison</button>
         <button class="btn small tab" data-tab="all">♾️ Général</button>
+        <button class="btn small tab" data-tab="hof">🏆 Hall of Fame</button>
+        <button class="btn small tab" data-tab="plse">📉 Les Pls (Shame)</button>
+        <button class="btn small tab" data-tab="archive">📜 Vainqueurs Saisons</button>
         <button class="btn small tab" data-tab="crea">🛠️ Créateurs</button>
         <button class="btn small tab" data-tab="hist">📜 Histoire</button>
         <span class="spacer"></span>
@@ -332,13 +335,13 @@
   <!-- RÉUSSITES -->
   <section id="screen-ach" class="screen">
     <button class="btn small backbtn" data-go="home">← Retour</button>
-    <div class="card" style="margin-top:52px"><h1>🎖️ Réussites</h1><div id="achList"></div></div>
+    <div class="card" style="margin-top:52px"><h1>🎖️ Réussites &amp; Badges</h1><div id="achList"></div></div>
   </section>
 
   <!-- STATS -->
   <section id="screen-stats" class="screen">
     <button class="btn small backbtn" data-go="home">← Retour</button>
-    <div class="card" style="margin-top:52px"><h1>📊 Tes stats</h1><div id="statsBox"></div></div>
+    <div class="card" style="margin-top:52px"><h1>📊 Tes stats détaillées &amp; Taux de réussite</h1><div id="statsBox"></div></div>
   </section>
 
 </main>
@@ -356,14 +359,13 @@ import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/f
    🔥 CONFIGURATION FIREBASE (REMPLACE LES VALEURS CI-DESSOUS PAR LES TIENNES)
    ========================================================================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyBdkugdU5p59ftou8Q1Jfw1X22HosAeNM8",
-  authDomain: "terrapin-online.firebaseapp.com",
-  projectId: "terrapin-online",
-  storageBucket: "terrapin-online.firebasestorage.app",
-  messagingSenderId: "197578162123",
-  appId: "1:197578162123:web:aff19a6937c4063d03404e"
+  apiKey: "REMPLACE_PAR_TON_API_KEY",
+  authDomain: "TON-PROJET.firebaseapp.com",
+  projectId: "TON-PROJET",
+  storageBucket: "TON-PROJET.firebasestorage.app",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef123456"
 };
-
 /* ========================================================================= */
 
 /* ================= UTILS ================= */
@@ -738,7 +740,7 @@ const EVENTS_RAW=[
 [1825,"Premier chemin de fer public","Une locomotive circule entre Stockton et Darlington, en Angleterre."],
 [1839,"La photographie","Daguerre présente officiellement le daguerréotype à l'Académie des sciences."],
 [1848,"Le printemps des peuples","Une vague révolutionnaire traverse l'Europe entière."],
-[1859,"Darwin publie","« De l'origine des espèces » bouleverse la vision du vivant."],
+[1859,"Darwin publishes","« De l'origine des espèces » bouleverse la vision du vivant."],
 [1861,"Guerre de Sécession","Les États du Sud font sécession : la guerre civile américaine commence."],
 [1869,"Canal de Suez","Le canal reliant la Méditerranée à la mer Rouge est inauguré."],
 [1876,"Le téléphone","Alexander Graham Bell dépose le brevet du téléphone."],
@@ -835,7 +837,7 @@ const EPHEM=[
 ];
 
 /* ================= FIREBASE CLOUD STATE & SYNC ================= */
-let dbState = { profiles: {}, challenges: {}, quizUser: [] };
+let dbState = { profiles: {}, challenges: {}, quizUser: [], seasonArchives: {} };
 let currentUsername = localStorage.getItem("terrapin_current_user") || null;
 let firestoreDb = null, firebaseAuth = null, stateDocRef = null;
 
@@ -880,6 +882,9 @@ function mergeStates(remote) {
   }
   if (remote.challenges && typeof remote.challenges === "object") {
     dbState.challenges = Object.assign({}, dbState.challenges, remote.challenges);
+  }
+  if (remote.seasonArchives && typeof remote.seasonArchives === "object") {
+    dbState.seasonArchives = Object.assign({}, dbState.seasonArchives, remote.seasonArchives);
   }
   if (remote.quizUser && Array.isArray(remote.quizUser)) {
     const ids = new Set((dbState.quizUser || []).map(x => x.id));
@@ -984,11 +989,12 @@ function newProfile(name){
   saveCloud();
 }
 
-/* ================= RÉUSSITES ================= */
+/* ================= RÉUSSITES & BADGES ÉTENDUS ================= */
 const ACH=[
  {id:"first",ico:"🎮",n:"Premier pas",d:"Terminer une première partie",c:function(p){return p.stats.answered>0;}},
  {id:"perfect",ico:"🎯",n:"Sans-faute",d:"Une réponse parfaite (dans la tolérance)",c:function(p){return p.stats.perfect>0;}},
  {id:"combo5",ico:"🔥",n:"En feu",d:"5 réponses de suite à 60 %+ de précision",c:function(p){return (p.bestCombo||0)>=5;}},
+ {id:"combo10",ico:"⚡",n:"Foudre de guerre",d:"10 réponses de suite avec excellente précision",c:function(p){return (p.bestCombo||0)>=10;}},
  {id:"streak3",ico:"📅",n:"Habitué",d:"Série de 3 jours sur le défi quotidien",c:function(p){return p.streak>=3;}},
  {id:"streak7",ico:"🗓️",n:"Semaine complète",d:"Série de 7 jours",c:function(p){return p.streak>=7;}},
  {id:"streak30",ico:"🏆",n:"Machine",d:"Série de 30 jours",c:function(p){return p.streak>=30;}},
@@ -999,7 +1005,10 @@ const ACH=[
  {id:"cats",ico:"🌐",n:"Explorateur",d:"Jouer dans les 8 catégories",c:function(p){return Object.keys(p.stats.byCat).length>=8;}},
  {id:"daily4k",ico:"💎",n:"Journée de diamant",d:"4000 points ou plus sur un défi quotidien",c:function(p){return p.bestDaily>=4000;}},
  {id:"creator",ico:"🛠️",n:"Architecte",d:"Créer son premier défi",c:function(p){return p.createdCh.length>0;}},
- {id:"host",ico:"🎤",n:"Animateur",d:"Jouer 10 défis d'autres joueurs",c:function(p){return Object.keys(p.playedCh).length>=10;}}
+ {id:"host",ico:"🎤",n:"Animateur",d:"Jouer 10 défis d'autres joueurs",c:function(p){return Object.keys(p.playedCh).length>=10;}},
+ {id:"speedrun",ico:"⏱️",n:"Éclair",d:"Valider un défi en moins de 10 secondes",c:function(p){return p.speedrun===true;}},
+ {id:"globetrotter",ico:"✈️",n:"Globe-trotter",d:"Plus de 1000 points cumulés en entraînement",c:function(p){return (p.trainPts||0)>=1000;}},
+ {id:"nightowl",ico:"🌙",n:"Oiseau de nuit",d:"Jouer entre minuit et 5h du matin",c:function(p){return p.nightOwl===true;}}
 ];
 const ACH_H=[
  {id:"hfirst",ico:"📜",n:"Historien en herbe",d:"Participer à une frise",c:function(p){return p.hist&&p.hist.rounds>0;}},
@@ -1014,7 +1023,9 @@ const ACH_H=[
 const ALLACH=ACH.concat(ACH_H);
 function checkAch(){
   const p=P(); if(!p)return;
-  ALLACH.forEach(function(a){ if(!p.ach[a.id]&&a.c(p)){p.ach[a.id]=Date.now();toast(a.ico+" Réussite : "+a.n);beep(880,.25);} });
+  const hr=new Date().getHours();
+  if(hr>=0&&hr<5)p.nightOwl=true;
+  ALLACH.forEach(function(a){ if(!p.ach[a.id]&&a.c(p)){p.ach[a.id]=Date.now();toast(a.ico+" Réussite débloquée : "+a.n);beep(880,.25);} });
   saveCloud();
 }
 
@@ -1495,7 +1506,7 @@ function buildDaily(){
 function startGame(questions,mode,meta){
   initMap(); if(!map)return;
   game={mode:mode,questions:questions,i:0,results:[],combo:0,hintUsed:false,pin:null,
-    challengeId:(meta&&meta.challengeId)||null,sessionPts:0};
+    challengeId:(meta&&meta.challengeId)||null,sessionPts:0,startTime:Date.now()};
   $("#feedback").classList.add("hidden");
   show("game"); loadQuestion();
 }
@@ -1574,10 +1585,12 @@ function submitAnswer(timeout){
     p.bestCombo=Math.max(p.bestCombo||0,game.combo);
     p.stats.answered++; 
     if(prec>=1)p.stats.perfect++;
+    if(prec>=0.6)p.stats.successCount=(p.stats.successCount||0)+1;
     if(answered)p.stats.distSum+=dist;
     if(q.diff===4&&answered&&dist<50)p.sharpExpert=true;
-    const bc=p.stats.byCat[q.cat]||{n:0,precSum:0,distSum:0};
-    bc.n++;bc.precSum+=prec;bc.distSum+=(answered?dist:0);p.stats.byCat[q.cat]=bc;
+    const bc=p.stats.byCat[q.cat]||{n:0,precSum:0,distSum:0,success:0};
+    bc.n++; bc.precSum+=prec; bc.distSum+=(answered?dist:0); if(prec>=0.6)bc.success++;
+    p.stats.byCat[q.cat]=bc;
   }
   game.sessionPts+=pts;
   game.results.push({q:q,dist:answered?dist:null,prec:prec,pts:pts,mark:markOf(prec,answered),hint:game.hintUsed});
@@ -1655,6 +1668,7 @@ function finishGame(){
         if(ch.author!==p.name){const au=dbState.profiles[ch.author];if(au)au.authorPts=(au.authorPts||0)+10;}
       }
     }
+    if(game.startTime && (Date.now() - game.startTime < 10000)) p.speedrun = true;
     title="🛠️ Défi terminé";
     sub=ch?("Défi de "+ch.author):"";
   }
@@ -1705,7 +1719,7 @@ function renderHome(){
   if(isAdmin()){
     $("#adminCard").style.display="block";
     $("#adminResetBtn").onclick=function(){
-      confirmAdminReset();
+      openAdminResetModal();
     };
   } else {
     $("#adminCard").style.display="none";
@@ -1716,24 +1730,58 @@ function renderHome(){
     .sort(function(a,b){return b.daily[dk].score-a.daily[dk].score;}).slice(0,3);
   if(rows.length){html="<div class='mut' style='margin-bottom:4px'>Podium du jour :</div>"+rows.map(function(r,i){return ["🥇","🥈","🥉"][i]+" "+esc(r.name)+" · "+fmt(r.daily[dk].score)+" pts";}).join("<br>");}
   $("#dailyMini").innerHTML=html;
-  $("#achCount").textContent=p?(Object.keys(p.ach).length+" / "+ALLACH.length+" débloquées"):"";
+  $("#achCount").textContent=p?(Object.keys(p.ach).length+" / "+ALLACH.length+" débloqués"):"";
 }
 
-function confirmAdminReset(){
-  $("#modalBox").innerHTML="<h2>⚙️ Administration</h2>"
-   +"<p>En tant qu'administrateur (premier joueur), tu peux réinitialiser les classements et points de tous les joueurs en ligne.</p>"
+function openAdminResetModal(){
+  const si=seasonInfo();
+  dbState.seasonArchives = dbState.seasonArchives || {};
+  let seasonOpts = "<option value='all'>♾️ Remettre TOUT à zéro (Tous les profils, tous les scores, défis)</option>";
+  seasonOpts += "<option value='current'>🏅 Remettre à zéro uniquement la saison en cours (Saison " + si.n + ")</option>";
+  for(let s = 1; s < si.n; s++){
+    seasonOpts += "<option value='season_"+s+"'>📜 Archiver &amp; Remettre à zéro la Saison " + s + "</option>";
+  }
+
+  $("#modalBox").innerHTML="<h2>⚙️ Administration &amp; Saisons</h2>"
+   +"<p class='mut'>En tant qu'administrateur, tu peux réinitialiser les scores, archiver une saison ou tout remettre à zéro pour repartir sur de nouvelles bases.</p>"
+   +"<label>Action de remise à zéro</label><select id='adminResetChoice'>"+seasonOpts+"</select>"
    +"<div class='row' style='margin-top:14px'>"
-   +"<button class='btn danger' id='doReset'>Confirmer la remise à zéro</button>"
+   +"<button class='btn danger' id='doResetConfirm'>Exécuter la remise à zéro</button>"
    +"<button class='btn' id='closeModal'>Annuler</button></div>";
   $("#modal").classList.add("open");
-  $("#doReset").onclick=function(){
-    Object.values(dbState.profiles).forEach(function(pr){
-      pr.points=0; pr.seasonPts={}; pr.seasonDays={}; pr.daily={}; pr.streak=0; pr.bestDaily=0; pr.trainPts=0;
-    });
-    dbState.challenges={};
+
+  $("#doResetConfirm").onclick=function(){
+    const choice = $("#adminResetChoice").value;
+    if(choice === "all"){
+      Object.values(dbState.profiles).forEach(function(pr){
+        pr.points=0; pr.seasonPts={}; pr.seasonDays={}; pr.daily={}; pr.streak=0; pr.bestDaily=0; pr.trainPts=0;
+        pr.stats={answered:0,perfect:0,distSum:0,byCat:{},successCount:0};
+      });
+      dbState.challenges={};
+      toast("🔄 Remise à zéro complète effectuée pour tout le monde !");
+    } else if(choice === "current"){
+      Object.values(dbState.profiles).forEach(function(pr){
+        if(pr.seasonPts) pr.seasonPts[si.n]=0;
+        if(pr.seasonDays) pr.seasonDays[si.n]=[];
+      });
+      toast("🏅 Saison " + si.n + " remise à zéro pour tous !");
+    } else if(choice.indexOf("season_") === 0){
+      const sNum = parseInt(choice.split("_")[1], 10);
+      // Archive winner of that season
+      let topP=null, topScore=-1;
+      Object.values(dbState.profiles).forEach(function(pr){
+        const pts = pr.seasonPts && pr.seasonPts[sNum] ? pr.seasonPts[sNum] : 0;
+        if(pts > topScore){topScore = pts; topP = pr.name;}
+      });
+      dbState.seasonArchives[sNum] = {winner: topP || "Personne", score: topScore > 0 ? topScore : 0, date: new Date().toLocaleDateString("fr-FR")};
+      Object.values(dbState.profiles).forEach(function(pr){
+        if(pr.seasonPts) pr.seasonPts[sNum]=0;
+        if(pr.seasonDays) pr.seasonDays[sNum]=[];
+      });
+      toast("📜 Saison " + sNum + " archivée et remise à zéro !");
+    }
     saveCloud();
     $("#modal").classList.remove("open");
-    toast("🔄 Système remis à zéro par l'admin !");
     renderHome();
   };
   $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
@@ -1775,11 +1823,10 @@ $("#modal").addEventListener("click",function(e){if(e.target.id==="modal")$("#mo
 $("#helpBtn").addEventListener("click",function(){
   $("#modalBox").innerHTML="<h2>❓ Comment jouer</h2><div style='font-size:.92rem;line-height:1.55'>"
   +"<p><b>🌍 En Ligne.</b> Tes scores, défis et quiz sont synchronisés en direct avec les autres joueurs connectés via Firebase.</p>"
-  +"<p><b>👑 Admin.</b> Le premier joueur inscrit est administrateur et peut réinitialiser les classements.</p>"
-  +"<p><b>🎯 Défi du jour.</b> 5 questions identiques pour tous, 1 seule tentative qui compte par jour.</p>"
-  +"<p><b>🏅 Saisons & Inscription.</b> 28 jours. Si un joueur ne joue pas de la saison, il est marqué comme « non-participant » et ses jours joués sont affichés dans le tableau.</p>"
-  +"<p><b>🏋️ Entraînement.</b> Illimité, 25 % des points bankés, mais ne compte pas dans le classement de la saison.</p>"
-  +"<p><b>📜 TerraChrono.</b> Frise chronologique royale (solo ou multi sans blocage).</p>"
+  +"<p><b>👑 Admin.</b> Le premier joueur inscrit est administrateur et peut réinitialiser les classements ou archiver les saisons.</p>"
+  +"<p><b>🏆 Hall of Fame &amp; Pls.</b> Retrouve les légendes all-time et les pires performances dans l'onglet Classements.</p>"
+  +"<p><b>📊 Taux de réussite.</b> Suis ta précision par catégorie et ton taux de réussite global.</p>"
+  +"<p><b>📜 TerraChrono.</b> Frise chronologique royale en battle royale (solo ou multi sans blocage).</p>"
   +"</div><button class='btn primary' id='closeModal' style='margin-top:10px'>Compris !</button>";
   $("#modal").classList.add("open");
   $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
@@ -1879,7 +1926,7 @@ $("#importBtn").addEventListener("click",function(){
   }catch(e){toast("Code invalide 🤔");}
 });
 
-/* ================= CLASSEMENTS ================= */
+/* ================= CLASSEMENTS & HALL OF FAME & SHAME ================= */
 let currentTab="day";
 document.querySelectorAll(".tab").forEach(function(b){b.addEventListener("click",function(){renderBoard(b.dataset.tab);});});
 if($("#refreshBoardBtn")){
@@ -1940,6 +1987,36 @@ function renderBoard(tab){
       .sort(function(a,b){return b.v-a.v;});
     cols=["Joueur","Points","Niveau"];
   }
+  else if(currentTab==="hof"){
+    title="🏆 Hall of Fame All-Time (Légendes)";
+    rows=ps.map(function(p){
+      const bestD=p.bestDaily||0;
+      const streak=p.streak||0;
+      return {n:p.name, v:bestD, x:"🔥 "+streak+" j de série · Max journalier : "+fmt(bestD)+" pts"};
+    }).sort(function(a,b){return b.v-a.v;});
+    cols=["Légende","Meilleur Défi Jour","Exploit & Série"];
+  }
+  else if(currentTab==="plse"){
+    title="📉 Hall of Shame (Les Pls & Égarés)";
+    rows=ps.map(function(p){
+      const s=p.stats;
+      const avg=s.answered>0?Math.round(s.distSum/s.answered):0;
+      return {n:p.name, v:avg, x:s.answered+" questions · Erreur moyenne : "+fmt(avg)+" km 😬"};
+    }).sort(function(a,b){return b.v-a.v;}); // highest avg error = biggest pls
+    cols=["Explorateur perdu","Erreur moy. (km)","Bilan de l'égarement"];
+  }
+  else if(currentTab==="archive"){
+    title="📜 Historique & Vainqueurs de Saisons";
+    const arcs=dbState.seasonArchives||{};
+    const keys=Object.keys(arcs).sort(function(a,b){return b-a;});
+    $("#boardBox").innerHTML="<h2>"+title+"</h2>"
+     +(keys.length?"<table><tr><th>Saison</th><th>Vainqueur</th><th>Score record</th><th>Date d'archivage</th></tr>"
+      +keys.map(function(k){
+        const a=arcs[k];
+        return "<tr><td><b>Saison "+k+"</b></td><td>👑 "+esc(a.winner)+"</td><td><b>"+fmt(a.score)+" pts</b></td><td class='mut'>"+esc(a.date)+"</td></tr>";
+      }).join("")+"</table>":"<p class='mut'>Aucune saison archivée pour le moment. L'admin peut archiver une saison terminée !</p>");
+    return;
+  }
   else if(currentTab==="hist"){
     title="📜 Classement histoire";
     rows=ps.map(function(p){const h=ensureHist(p);return {n:p.name,v:h.pts,x:h.wins+" frise(s) gagnée(s)"};})
@@ -1963,10 +2040,10 @@ function renderBoard(tab){
       }
       return "<tr"+(isMe?" class='me'":"")+"><td>"+(i<3?medals[i]:(i+1)+".")+" "+esc(r.n)+"</td><td><b>"+fmt(r.v)+"</b></td><td class='mut'>"+esc(String(r.x))+"</td></tr>";
     }).join("")+"</table>"
-    :"<p class='mut'>Personne n'a encore marqué. Sois le premier !</p>");
+    :"<p class='mut'>Personne n'a encore marqué dans cette catégorie. Sois le premier !</p>");
 }
 
-/* ================= RÉUSSITES & STATS ================= */
+/* ================= RÉUSSITES & STATS DÉTAILLÉES ================= */
 function renderAch(){
   const p=P();
   $("#achList").innerHTML=ALLACH.map(function(a){
@@ -1980,18 +2057,22 @@ function renderStats(){
   if(!p){$("#statsBox").innerHTML="<p class='mut'>Choisis un profil d'abord.</p>";return;}
   const s=p.stats, avg=s.answered?Math.round(s.distSum/s.answered):0;
   const acc=s.answered?Math.round(100*s.perfect/s.answered):0;
+  const globalSuccess=s.answered>0?Math.round(100*(s.successCount||0)/s.answered):0;
   let html="<div class='grid'>"
    +"<div class='card'><div class='mut'>Points</div><div class='big'>"+fmt(p.points)+"</div><div class='mut'>Niveau "+levelOf(p)+"</div><div class='lvlbar'><i style='width:"+lvlPct(p)+"%'></i></div></div>"
    +"<div class='card'><div class='mut'>Série 🔥</div><div class='big'>"+p.streak+" j</div><div class='mut'>"+fmt(Object.keys(p.daily).length)+" défis joués</div></div>"
-   +"<div class='card'><div class='mut'>Questions</div><div class='big'>"+fmt(s.answered)+"</div><div class='mut'>"+s.perfect+" sans-faute ("+acc+" %)</div></div>"
-   +"<div class='card'><div class='mut'>Erreur moyenne</div><div class='big'>"+fmt(avg)+" km</div><div class='mut'>Meilleur défi : "+fmt(p.bestDaily)+" pts</div></div>"
+   +"<div class='card'><div class='mut'>Taux de réussite global</div><div class='big'>"+globalSuccess+" %</div><div class='mut'>"+(s.successCount||0)+" / "+s.answered+" réussites (≥ 60%)</div></div>"
+   +"<div class='card'><div class='mut'>Erreur moyenne</div><div class='big'>"+fmt(avg)+" km</div><div class='mut'>Précision sans-faute : "+acc+" %</div></div>"
    +"</div><h2>Entraînement séparé</h2><div class='card'><div class='mut'>Points d'entraînement bankés :</div><div class='big'>"+fmt(p.trainPts||0)+" pts</div><div class='mut'>Ne comptent pas dans le classement officiel de la saison.</div></div>"
-   +"<h2>Par catégorie</h2>";
+   +"<h2>Taux de réussite &amp; précision par catégorie</h2>";
   const cats=Object.keys(CATS).filter(function(c){return s.byCat[c];});
   html+=cats.length?cats.map(function(c){
-    const b=s.byCat[c],m=Math.round(b.precSum/b.n*100),d=Math.round(b.distSum/b.n);
-    return "<div class='row' style='margin:8px 0'><span style='width:150px'>"+CATS[c]+"</span><div class='bar'><i style='width:"+m+"%'></i></div><span class='mut' style='width:130px;text-align:right'>"+m+" % · "+fmt(d)+" km</span></div>";
-  }).join(""):"<p class='mut'>Joue pour remplir tes stats !</p>";
+    const b=s.byCat[c], precM=Math.round(b.precSum/b.n*100), succM=Math.round(100*(b.success||0)/b.n), d=Math.round(b.distSum/b.n);
+    return "<div class='card' style='margin:8px 0'><div class='row'><b>"+CATS[c]+"</b><span class='spacer'></span><span class='mut'>"+b.n+" partie(s) jouée(s)</span></div>"
+     +"<div class='row' style='margin-top:6px'><span class='mut' style='width:110px'>Réussite (≥60%)</span><div class='bar'><i style='width:"+succM+"%;background:linear-gradient(90deg,#34d399,#22d3ee)'></i></div><span class='mut' style='width:45px;text-align:right'>"+succM+" %</span></div>"
+     +"<div class='row' style='margin-top:4px'><span class='mut' style='width:110px'>Précision moy.</span><div class='bar'><i style='width:"+precM+"%'></i></div><span class='mut' style='width:45px;text-align:right'>"+precM+" %</span></div>"
+     +"<div class='mut' style='margin-top:4px'>Distance moyenne d'erreur : <b>"+fmt(d)+" km</b></div></div>";
+  }).join(""):"<p class='mut'>Joue dans différentes catégories pour afficher tes taux de réussite détaillés !</p>";
   $("#statsBox").innerHTML=html;
 }
 function lvlPct(p){
