@@ -97,12 +97,12 @@
   .hcard div{font-size:.78rem; color:var(--mut)}
   .hcard.sel{border-color:var(--gold); box-shadow:0 0 16px rgba(251,191,36,.35)}
   .hidden{display:none !important}
-  .online-indicator{display:inline-block; width:8px; height:8px; border-radius:50%; background:#34d399; margin-right:4px}
+  .online-indicator{display:inline-block; width:8px; height:8px; border-radius:50%; background:#fbbf24; margin-right:4px}
 </style>
 </head>
 <body>
 <header>
-  <div class="logo">🌍 TerraPin <small><span class="online-indicator"></span>En Ligne</small></div>
+  <div class="logo">🌍 TerraPin <small><span class="online-indicator" id="syncDot"></span><span id="syncLabel">Connexion…</span></small></div>
   <div class="hright">
     <button class="chip" id="homeBtn" title="Retour à l'accueil">🏠</button>
     <span class="chip" id="seasonChip" title="Saison en cours">…</span>
@@ -314,10 +314,18 @@
         <button class="btn small tab" data-tab="all">♾️ Général</button>
         <button class="btn small tab" data-tab="crea">🛠️ Créateurs</button>
         <button class="btn small tab" data-tab="hist">📜 Histoire</button>
+        <span class="spacer"></span>
+        <button class="btn small primary" id="refreshBoardBtn">🔄 Actualiser</button>
       </div>
       <div id="seasonInfo" class="mut" style="margin-top:8px"></div>
       <div id="boardBox" style="margin-top:8px"></div>
-      <div class="mut" style="margin-top:10px">Classement en ligne synchronisé (Cloud Firestore). Les inscrits sans participation active sur la saison sont affichés comme non-participants avec leurs jours joués.</div>
+      <div class="card" style="background:var(--card2);margin-top:14px;padding:12px">
+        <div class="row">
+          <span class="mut" id="roomInfoTxt">🔥 Synchronisé en temps réel via Firebase</span>
+          <span class="spacer"></span>
+          <button class="btn small" id="shareRoomBtn">🔗 Partager le lien du jeu</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -341,8 +349,22 @@
 <!-- FIREBASE SDKs -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+/* =========================================================================
+   🔥 CONFIGURATION FIREBASE (REMPLACE LES VALEURS CI-DESSOUS PAR LES TIENNES)
+   ========================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyBdkugdU5p59ftou8Q1Jfw1X22HosAeNM8",
+  authDomain: "terrapin-online.firebaseapp.com",
+  projectId: "terrapin-online",
+  storageBucket: "terrapin-online.firebasestorage.app",
+  messagingSenderId: "197578162123",
+  appId: "1:197578162123:web:aff19a6937c4063d03404e"
+};
+
+/* ========================================================================= */
 
 /* ================= UTILS ================= */
 const $=s=>document.querySelector(s);
@@ -519,7 +541,7 @@ monuments:[
  {p:"Clique sur le Golden Gate Bridge",lat:37.8199,lon:-122.4783,d:2,hint:"San Francisco",fact:"Sa couleur officielle s'appelle « International Orange »."},
  {p:"Clique sur Pétra",lat:30.3285,lon:35.4444,d:3,hint:"Jordanie",fact:"Cité nabatéenne taillée dans la roche rose il y a plus de 2000 ans."},
  {p:"Clique sur Angkor Wat",lat:13.4125,lon:103.867,d:3,hint:"Cambodge",fact:"Plus grand monument religieux du monde (162 hectares)."},
- {p:"Clique sur Stonehenge",lat:51.1789,lon:-1.8262,d:3,hint:"Sud de l'Angleterre",fact:"Certaines pierres viennent de 250 km plus loin, transportées il y a 4500 ans."},
+ {p:"Clique sur Stonehenge",lat:51.1789,lon:-1.8262,d:3,hint:"Sud de l'Angleterre",fact:"Certaines pierres ont été transportées sur plus de 250 km."},
  {p:"Clique sur Chichén Itzá",lat:20.6843,lon:-88.5678,d:3,hint:"Péninsule du Yucatán, Mexique",fact:"Un applaudissement face à la pyramide renvoie un écho comme un cri de quetzal."},
  {p:"Clique sur la tour de Pise",lat:43.723,lon:10.3966,d:3,fact:"Elle penchait déjà pendant sa construction, dès 1173."},
  {p:"Clique sur la porte de Brandebourg",lat:52.5163,lon:13.3777,d:3,hint:"Berlin",fact:"Elle a survécu aux deux guerres mondiales, presque seule au milieu du no man's land."},
@@ -813,44 +835,56 @@ const EPHEM=[
 ];
 
 /* ================= FIREBASE CLOUD STATE & SYNC ================= */
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'terrapin-online-github-v1';
-const defaultFirebaseConfig = {
-  apiKey: "AIzaSyDummyPublicKeyForDemoSync",
-  authDomain: "terrapin-sync.firebaseapp.com",
-  projectId: "terrapin-sync"
-};
-const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') 
-  ? JSON.parse(__firebase_config) 
-  : null;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined;
-
-// Salon public partagé par défaut (permet de se voir sur GitHub Pages via API REST JSONBin/KV ou Firebase)
-const SYNC_ROOM_KEY = "terrapin_global_room_v1";
-const SYNC_API_URL = "https://kvdb.io/A2x9kLmPqR7vT4wN8zB3cF/" + SYNC_ROOM_KEY;
-
 let dbState = { profiles: {}, challenges: {}, quizUser: [] };
 let currentUsername = localStorage.getItem("terrapin_current_user") || null;
 let firestoreDb = null, firebaseAuth = null, stateDocRef = null;
-let useRestFallback = false;
+
+function setSyncStatus(state, text) {
+  const dot = $("#syncDot");
+  const lbl = $("#syncLabel");
+  if (!dot || !lbl) return;
+  if (state === "ok") {
+    dot.style.background = "#34d399";
+    lbl.textContent = text || "En ligne";
+  } else if (state === "sync") {
+    dot.style.background = "#fbbf24";
+    lbl.textContent = text || "Synchro…";
+  } else {
+    dot.style.background = "#f87171";
+    lbl.textContent = text || "Hors-ligne";
+  }
+}
 
 function mergeStates(remote) {
-  if (!remote) return;
-  if (remote.profiles) {
+  if (!remote || typeof remote !== "object") return;
+  if (remote.profiles && typeof remote.profiles === "object") {
     Object.keys(remote.profiles).forEach(k => {
       const rp = remote.profiles[k];
       const lp = dbState.profiles[k];
-      if (!lp || (rp.points || 0) >= (lp.points || 0) || (rp.stats && lp.stats && rp.stats.answered >= lp.stats.answered)) {
+      if (!lp) {
         dbState.profiles[k] = rp;
+      } else {
+        const rPts = rp.points || 0;
+        const lPts = lp.points || 0;
+        const rAns = (rp.stats && rp.stats.answered) || 0;
+        const lAns = (lp.stats && lp.stats.answered) || 0;
+        if (k !== currentUsername || rPts > lPts || rAns > lAns) {
+          dbState.profiles[k] = Object.assign({}, lp, rp);
+          dbState.profiles[k].points = Math.max(rPts, lPts);
+          dbState.profiles[k].daily = Object.assign({}, lp.daily || {}, rp.daily || {});
+          dbState.profiles[k].seasonPts = Object.assign({}, lp.seasonPts || {}, rp.seasonPts || {});
+          dbState.profiles[k].seasonDays = Object.assign({}, lp.seasonDays || {}, rp.seasonDays || {});
+        }
       }
     });
   }
-  if (remote.challenges) {
+  if (remote.challenges && typeof remote.challenges === "object") {
     dbState.challenges = Object.assign({}, dbState.challenges, remote.challenges);
   }
   if (remote.quizUser && Array.isArray(remote.quizUser)) {
     const ids = new Set((dbState.quizUser || []).map(x => x.id));
     remote.quizUser.forEach(q => {
-      if (!ids.has(q.id)) {
+      if (q && q.id && !ids.has(q.id)) {
         dbState.quizUser.push(q);
         ids.add(q.id);
       }
@@ -858,84 +892,42 @@ function mergeStates(remote) {
   }
 }
 
-async function pollRestSync() {
+async function initCloudSync(){
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("REMPLACE")) {
+    setSyncStatus("err", "Config Firebase manquante");
+    console.warn("⚠️ Configure firebaseConfig avec tes clés Firebase !");
+    return;
+  }
+
   try {
-    const res = await fetch(SYNC_API_URL + "?t=" + Date.now());
-    if (res.ok) {
-      const remote = await res.json();
-      mergeStates(remote);
-      localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
-      if (currentUsername && dbState.profiles[currentUsername]) {
+    setSyncStatus("sync", "Connexion…");
+    const app = initializeApp(firebaseConfig);
+    firebaseAuth = getAuth(app);
+    firestoreDb = getFirestore(app);
+
+    await signInAnonymously(firebaseAuth);
+    stateDocRef = doc(firestoreDb, "terrapin", "global_state");
+
+    onSnapshot(stateDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const remote = docSnap.data();
+        mergeStates(remote);
+        localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
+        setSyncStatus("ok", "En ligne");
         renderHome();
         if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
         if (document.querySelector("#screen-challenges.active")) renderChallenges();
+      } else {
+        setDoc(stateDocRef, dbState);
       }
-    }
-  } catch (e) {
-    console.debug("REST poll error:", e);
-  }
-}
-
-async function pushRestSync() {
-  try {
-    // Pull latest before pushing to avoid overwriting friend's data
-    const res = await fetch(SYNC_API_URL + "?t=" + Date.now());
-    if (res.ok) {
-      const remote = await res.json();
-      mergeStates(remote);
-    }
-    await fetch(SYNC_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dbState)
+    }, (err) => {
+      console.error("Erreur Firestore :", err);
+      setSyncStatus("err", "Erreur Firestore");
     });
   } catch (e) {
-    console.debug("REST push error:", e);
+    console.error("Erreur d'initialisation Firebase :", e);
+    setSyncStatus("err", "Hors-ligne");
   }
-}
-
-async function initCloudSync(){
-  if (firebaseConfig && firebaseConfig.projectId) {
-    try {
-      const app = initializeApp(firebaseConfig);
-      firebaseAuth = getAuth(app);
-      firestoreDb = getFirestore(app);
-
-      if (initialAuthToken) {
-        await signInWithCustomToken(firebaseAuth, initialAuthToken);
-      } else {
-        await signInAnonymously(firebaseAuth);
-      }
-
-      stateDocRef = doc(firestoreDb, 'artifacts', appId, 'public', 'data', 'terrapin_main_state');
-      
-      onSnapshot(stateDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const remote = docSnap.data();
-          mergeStates(remote);
-          if (currentUsername && dbState.profiles[currentUsername]) {
-            renderHome();
-            if (document.querySelector("#screen-board.active")) renderBoard(currentTab);
-          }
-        } else {
-          setDoc(stateDocRef, dbState);
-        }
-      }, (error) => {
-        console.debug("Firestore sync notice, switching to REST:", error);
-        startRestMode();
-      });
-      return;
-    } catch(e) {
-      console.debug("Firebase unavailable on external host, switching to REST sync");
-    }
-  }
-  startRestMode();
-}
-
-function startRestMode() {
-  useRestFallback = true;
-  pollRestSync();
-  setInterval(pollRestSync, 6000); // Synchronisation automatique toutes les 6 secondes
 }
 
 function loadLocalFallback(){
@@ -949,13 +941,14 @@ async function saveCloud(){
   try {
     localStorage.setItem("terrapin_online_cache", JSON.stringify(dbState));
     if (currentUsername) localStorage.setItem("terrapin_current_user", currentUsername);
-    if (!useRestFallback && firestoreDb && stateDocRef && firebaseAuth && firebaseAuth.currentUser) {
-      await setDoc(stateDocRef, dbState);
-    } else {
-      await pushRestSync();
+    if (firestoreDb && stateDocRef && firebaseAuth && firebaseAuth.currentUser) {
+      setSyncStatus("sync", "Sauvegarde…");
+      await setDoc(stateDocRef, dbState, { merge: true });
+      setSyncStatus("ok", "En ligne");
     }
   } catch(e) {
-    console.debug("Save cloud err:", e);
+    console.error("Erreur sauvegarde Firebase :", e);
+    setSyncStatus("err", "Erreur synchro");
   }
 }
 
@@ -963,20 +956,17 @@ function P(){return currentUsername && dbState.profiles[currentUsername] ? dbSta
 function isAdmin(){
   const p = P();
   if(!p) return false;
-  // First profile created in the system is admin
   const allNames = Object.keys(dbState.profiles).sort((a,b)=>dbState.profiles[a].created - dbState.profiles[b].created);
   return allNames.length > 0 && allNames[0] === currentUsername;
 }
 
 function newProfile(name){
-  const allNames = Object.keys(dbState.profiles);
-  const isFirst = allNames.length === 0;
   dbState.profiles[name] = {
     name: name,
     created: Date.now(),
     points: 0,
     seasonPts: {},
-    seasonDays: {}, // Tracks days played per season { seasonNum: Set of date keys } -> converted to array for json
+    seasonDays: {},
     daily: {},
     lastDaily: null,
     streak: 0,
@@ -986,7 +976,7 @@ function newProfile(name){
     authorPts: 0,
     createdCh: [],
     playedCh: {},
-    trainPts: 0, // Training separated from season
+    trainPts: 0,
     bestCombo: 0,
     qz: { pts: 0, ok: 0, n: 0, answered: {}, dil: {}, daily: {}, created: 0 }
   };
@@ -1640,8 +1630,6 @@ function finishGame(){
     if(first){
       p.points+=total;
       p.seasonPts[si.n]=(p.seasonPts[si.n]||0)+total;
-      
-      // Track season days played
       p.seasonDays = p.seasonDays || {};
       p.seasonDays[si.n] = p.seasonDays[si.n] || [];
       if(!p.seasonDays[si.n].includes(dk)){
@@ -1652,7 +1640,6 @@ function finishGame(){
     title="🎯 Défi du jour";
     sub=first?("Série : "+p.streak+" jour"+(p.streak>1?"s":"")+" 🔥"):"Déjà joué aujourd'hui : pas de points en plus.";
   } else if(game.mode==="training"){
-    // Training points are separated and DO NOT count towards season ranking
     const banked=Math.round(total*0.25);
     p.trainPts=(p.trainPts||0)+banked;
     title="🏋️ Entraînement terminé";
@@ -1715,7 +1702,6 @@ function renderHome(){
   $("#dailyBtn").textContent=done?"Voir le classement ➜":"Jouer ➜";
   $("#dailyBtn").onclick=function(){ if(!requireProfile())return; if(done){show("board");renderBoard("day");} else startGame(buildDaily(),"daily"); };
   
-  // Admin button visibility
   if(isAdmin()){
     $("#adminCard").style.display="block";
     $("#adminResetBtn").onclick=function(){
@@ -1788,12 +1774,12 @@ $("#modal").addEventListener("click",function(e){if(e.target.id==="modal")$("#mo
 /* ================= AIDE ================= */
 $("#helpBtn").addEventListener("click",function(){
   $("#modalBox").innerHTML="<h2>❓ Comment jouer</h2><div style='font-size:.92rem;line-height:1.55'>"
-  +"<p><b>🌍 En Ligne.</b> Tes scores, défis et quiz sont synchronisés en direct avec les autres joueurs connectés.</p>"
+  +"<p><b>🌍 En Ligne.</b> Tes scores, défis et quiz sont synchronisés en direct avec les autres joueurs connectés via Firebase.</p>"
   +"<p><b>👑 Admin.</b> Le premier joueur inscrit est administrateur et peut réinitialiser les classements.</p>"
   +"<p><b>🎯 Défi du jour.</b> 5 questions identiques pour tous, 1 seule tentative qui compte par jour.</p>"
   +"<p><b>🏅 Saisons & Inscription.</b> 28 jours. Si un joueur ne joue pas de la saison, il est marqué comme « non-participant » et ses jours joués sont affichés dans le tableau.</p>"
   +"<p><b>🏋️ Entraînement.</b> Illimité, 25 % des points bankés, mais ne compte pas dans le classement de la saison.</p>"
-  +"<p><b>📜 TerraChrono.</b> Frise chronologique royale (solo ou multi sans blocage). Teste sans joueur additionnel en solo sans aucun souci !</p>"
+  +"<p><b>📜 TerraChrono.</b> Frise chronologique royale (solo ou multi sans blocage).</p>"
   +"</div><button class='btn primary' id='closeModal' style='margin-top:10px'>Compris !</button>";
   $("#modal").classList.add("open");
   $("#closeModal").onclick=function(){$("#modal").classList.remove("open");};
@@ -1896,10 +1882,27 @@ $("#importBtn").addEventListener("click",function(){
 /* ================= CLASSEMENTS ================= */
 let currentTab="day";
 document.querySelectorAll(".tab").forEach(function(b){b.addEventListener("click",function(){renderBoard(b.dataset.tab);});});
+if($("#refreshBoardBtn")){
+  $("#refreshBoardBtn").addEventListener("click",function(){
+    renderBoard(currentTab);
+    toast("✅ Classement actualisé !");
+  });
+}
+if($("#shareRoomBtn")){
+  $("#shareRoomBtn").addEventListener("click",function(){
+    const url = window.location.origin + window.location.pathname;
+    fallbackCopy(url, function(){
+      toast("🔗 Lien du jeu copié ! Envoie-le à tes amis.");
+    });
+  });
+}
 function tierOf(pts){return pts>=25000?"💎 Diamant":pts>=15000?"🥇 Or":pts>=8000?"🥈 Argent":pts>=3000?"🥉 Bronze":"🌱 Aucun";}
 function renderBoard(tab){
   currentTab=tab||currentTab;
   const si=seasonInfo(), dk=todayKey();
+  if($("#roomInfoTxt")){
+    $("#roomInfoTxt").textContent = "🔥 Firebase Temps Réel · " + Object.keys(dbState.profiles).length + " joueur(s) inscrit(s)";
+  }
   $("#seasonInfo").innerHTML="Saison "+si.n+" · jour "+si.day+" / 28 · <b>"+si.left+" jour"+(si.left>1?"s":"")+"</b> restants (fin : "+si.end.toLocaleDateString("fr-FR")+")";
   const ps=Object.values(dbState.profiles);
   let rows=[],cols=[],title="";
@@ -1913,7 +1916,6 @@ function renderBoard(tab){
   }
   else if(currentTab==="season"){
     title="🏅 Saison "+si.n+" (avec stats de participation)";
-    // In this view, ALL profiles are shown. If they haven't played this season, they are listed as non-participating with their days played count.
     rows=ps.map(function(p){
       const pts=p.seasonPts&&p.seasonPts[si.n]?p.seasonPts[si.n]:0;
       const daysArr=p.seasonDays&&p.seasonDays[si.n]?p.seasonDays[si.n]:[];
@@ -2101,7 +2103,6 @@ function fmtYear(y){return y<0?(Math.abs(y)+" av. J.-C."):String(y);}
 
 function renderHist(){
   const p=P();
-  const d=new Date(), m=d.getMonth()+1, day=d.getDate();
   loadEphem();
   $("#friseStart").onclick=function(){try{if(!requireProfile())return;renderFriseSetup();}catch(e){toast("Oups, réessaie !");}};
   if(!p){
