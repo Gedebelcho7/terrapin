@@ -8,7 +8,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#0b1020; --bg2:#0e1530; --card:#151c38; --card2:#1b2347;
@@ -390,10 +390,17 @@
    profils de ce navigateur.
    ============================================================ */
 
-/* ================= FIREBASE (optionnel) ================= */
-let firebaseConfig = { apiKey:"AIzaSyBdkugdU5p59ftou8Q1Jfw1X22HosAeNM8", authDomain:"terrapin-online.firebaseapp.com", projectId:"terrapin-online", storageBucket:"terrapin-online.firebasestorage.app", messagingSenderId:"", appId:"197578162123" };
+/* ================= FIREBASE (config intégrée, remplaçable via ⚙️) ================= */
+let firebaseConfig = {
+  apiKey: "AIzaSyBdkugdU5p59ftou8Q1Jfw1X22HosAeNM8",
+  authDomain: "terrapin-online.firebaseapp.com",
+  projectId: "terrapin-online",
+  storageBucket: "terrapin-online.firebasestorage.app",
+  messagingSenderId: "197578162123",
+  appId: "1:197578162123:web:aff19a6937c4063d03404e"
+};
 function firebaseConfigOk(){
-  return !!(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.databaseURL);
+  return !!(firebaseConfig.apiKey && firebaseConfig.projectId && !String(firebaseConfig.apiKey).includes("REMPLACE"));
 }
 
 /* ================= UTILS ================= */
@@ -928,34 +935,79 @@ function checkAch(){
 /* ================= SYNCHRO (local par défaut, Firebase optionnel) ================= */
 let SYNC_MODE="local";
 let LOCAL_SUBS={};
-function fbOnce(path){ return firebase.database().ref(path).get(); }
-function fbSet(path,val){ return firebase.database().ref(path).set(val); }
-function fbSub(path,cb){
-  const ref=firebase.database().ref(path);
-  const h=ref.on("value",s=>cb(s.val()));
-  return ()=>ref.off("value",h);
+/* SYNCHRO — mode local natif, ou Firestore (ton projet terrapin-online), comme ton fichier d'origine */
+let SYNC_MODE="local", FB_APP=null, FB_DOC_GUARD=null;
+let LOCAL_SUBS={};
+function fbDb(){ return firebase.firestore(); }
+function fbDocRef(){ return fbDb().doc("terrapin/global_state"); }
+function resolvePath(data,path){
+  let cur=data;
+  for(const part of String(path).split("/")){
+    if(cur==null||typeof cur!=="object") return null;
+    cur=cur[part];
+  }
+  return cur===undefined?null:cur;
 }
-function localGet(){ return null; }
-function initSync(){
+function nested(path,val){
+  const parts=String(path).split("/"); const root={}; let cur=root;
+  for(let i=0;i<parts.length-1;i++){ cur[parts[i]]={}; cur=cur[parts[i]]; }
+  cur[parts[parts.length-1]]=val;
+  return root;
+}
+async function fbSet(path,val){
+  const v=JSON.parse(JSON.stringify(val));
+  const fp=String(path).replace(/\//g,".");
+  try{ await fbDocRef().update({[fp]:v}); }
+  catch(e){
+    if(String(e.code||e.message||"")=="not-found"||String(e.message||"").includes("No document")){
+      await fbDocRef().set(nested(path,v),{merge:true});
+    } else { console.warn("fbSet",e); toast("Sync KO : "+(e.message||e.code||"écriture refusée")); }
+  }
+}
+async function fbOnce(path){
+  try{ const s=await fbDocRef().get(); return {val:()=>resolvePath(s.data(),path)}; }
+  catch(e){ console.warn("fbOnce",e); return {val:()=>null}; }
+}
+function fbSub(path,cb){
+  return fbDocRef().onSnapshot(s=>{ cb(resolvePath(s.data(),path)); },err=>{ console.warn("fbSub",err); setSyncUI("lo","Sync : erreur"); });
+}
+function fbErrText(e){
+  const c=String(e&&(e.code||""))||"";
+  if(c.includes("operation-not-allowed")) return "Dans la console Firebase : Authentication → Méthodes → activer « Anonyme ».";
+  if(c.includes("permission-denied")) return "Règles Firestore : mets-les en mode test (allow read, write: if true).";
+  if(c.includes("api-key")||c.includes("invalid")) return "Clé API invalide.";
+  return (e&&e.message)||c||"erreur réseau";
+}
+function setSyncUI(mode,label){
   const dot=$("#syncDot"),lab=$("#syncLabel");
+  if(!dot) return;
+  dot.classList.remove("ok","lo");
+  if(mode==="ok") dot.classList.add("ok");
+  if(mode==="lo") dot.classList.add("lo");
+  lab.textContent=label;
+}
+function initSync(){
+  setSyncUI("wait","Connexion…");
   try{
     const saved=localStorage.getItem(LSKEY+"/fbcfg");
-    if(saved){ firebaseConfig=Object.assign(firebaseConfig,JSON.parse(saved)); }
+    if(saved){ firebaseConfig=Object.assign({},firebaseConfig,JSON.parse(saved)); }
   }catch(e){}
   if(firebaseConfigOk() && typeof firebase!=="undefined" && firebase.initializeApp){
     try{
-      firebase.initializeApp(firebaseConfig);
+      if(!FB_APP) FB_APP=firebase.initializeApp(firebaseConfig);
       firebase.auth().signInAnonymously().then(()=>{
-        SYNC_MODE="online"; dot.classList.add("ok"); lab.textContent="En ligne 🔥";
-        toast("🔥 Mode en ligne activé !");
+        SYNC_MODE="online"; setSyncUI("ok","En ligne 🔥");
+        // garde une écoute permanente pour le statut temps réel
+        FB_DOC_GUARD=fbDocRef().onSnapshot(s=>{ setSyncUI("ok","En ligne 🔥"); },err=>{ SYNC_MODE="local"; setSyncUI("lo","Local 🔒"); toast("Firestore : "+fbErrText(err)); });
       }).catch(err=>{
-        SYNC_MODE="local"; dot.classList.add("lo"); lab.textContent="Local 🔒";
         console.warn("Firebase auth KO",err);
+        SYNC_MODE="local"; setSyncUI("lo","Local 🔒");
+        toast("Connexion impossible : "+fbErrText(err));
       });
-      return;
-    }catch(e){ console.warn(e); }
+    }catch(e){ console.warn(e); SYNC_MODE="local"; setSyncUI("lo","Local 🔒"); }
+  } else {
+    setSyncUI("lo","Local 🔒");
   }
-  SYNC_MODE="local"; dot.classList.add("lo"); lab.textContent="Local 🔒";
 }
 function DB(){
   if(SYNC_MODE==="online"){
@@ -968,7 +1020,7 @@ function DB(){
   }
   return {
     mode:"local",
-    get:async p=>({val:()=>localGet()}),
+    get:async p=>({val:()=>null}),
     set:async(p,v)=>{ try{ localStorage.setItem(LSKEY+"/share/"+p,JSON.stringify(v)); }catch(e){} },
     sub:(p,cb)=>{
       if(!LOCAL_SUBS[p]) LOCAL_SUBS[p]=[];
@@ -1987,9 +2039,9 @@ function resetAll(){
 $("#adminFbBtn").addEventListener("click",()=>{
   const cfg=localStorage.getItem(LSKEY+"/fbcfg")||'';
   modal(`<h1>🔥 Mode en ligne (Firebase)</h1>
-    <p class="mut">Pour jouer contre des amis <b>sur d'autres appareils</b> : crée un projet gratuit sur console.firebase.google.com, active <b>Realtime Database</b> (mode test) et <b>Authentication → Anonyme</b>, puis colle ta config ici.</p>
-    <label>Config Firebase (JSON)</label>
-    <textarea id="fbIn" placeholder='{"apiKey":"…","authDomain":"…","databaseURL":"https://TON-PROJET-default-rtdb.firebaseio.com","projectId":"…","appId":"…"}'>${esc(cfg)}</textarea>
+    <p class="mut">Ton fichier est pré-configuré sur le projet <b>terrapin-online</b> (Firestore, doc « terrapin/global_state »). Pour jouer sur d'autres appareils : rien à faire — même clé intégrée. Si tu changes de projet : colle ici une config Firestore + Authentication → Anonyme activé.</p>
+    <label>Config Firebase (JSON) — ton projet utilise Firestore : colle ici la config complète</label>
+    <textarea id="fbIn" placeholder='{"apiKey":"…","authDomain":"…","projectId":"…","appId":"…"}'>${esc(cfg)}</textarea>
     <div class="row" style="margin-top:12px">
       <button class="btn primary" onclick="saveFb()">💾 Enregistrer et recharger</button>
       <button class="btn danger" onclick="clearFb()">Débrancher</button>
@@ -1999,7 +2051,7 @@ function saveFb(){
   const raw=$("#fbIn").value.trim();
   if(!raw){ toast("Colle la config d'abord"); return; }
   let cfg=null; try{ cfg=JSON.parse(raw); }catch(e){ toast("JSON invalide 😕"); return; }
-  if(!cfg.databaseURL||!cfg.apiKey){ toast("Il faut au moins apiKey + databaseURL !"); return; }
+  if(!cfg.apiKey||!cfg.projectId){ toast("Il faut au moins apiKey + projectId !"); return; }
   localStorage.setItem(LSKEY+"/fbcfg",raw);
   closeModal(); location.reload();
 }
