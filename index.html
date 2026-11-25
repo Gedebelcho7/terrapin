@@ -2094,6 +2094,7 @@ async function main(){
   renderHome();
   go("home");
 }
+main().catch(e=>{ console.error(e); toast("Erreur de démarrage : "+((e&&e.message)||e)); });
 
 
 
