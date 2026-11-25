@@ -1813,7 +1813,7 @@ function renderBoard(){
     box.innerHTML=byWorst.length?tableOf(["","Joueur","Erreur moyenne 😅","Pitié"],
       byWorst.map((e,i)=>`<tr class="${e.id===ST.cur?"me":""}"><td>${["📉","🥈","🥉"][i]||"#"+(i+1)}</td>
       <td>${e.pl.avatar} ${esc(e.pl.name)}</td><td><b>${fmtDist(markAverage(e.pl))}</b></td>
-      <td>${markAverage(e.pl)>3000?"au moins une fois, reviens ⛏️":markAverage(e.pl)>1000?"un peu dans les choux🥬":"pas fou, mais bon"}</td></tr>`)
+      <td>${markAverage(e.pl)>3000?"au moins une fois, reviens ⛏️":markAverage(e.pl)>1000?"un peu dans les choux🥬":"pas fou, mais bon"}</td></tr>`))
       :'<span class="mut">Aucune donnée : joue un peu d\'abord.</span>';
   } else if(BOARD_TAB==="archive"){
     box.innerHTML=ST.seasonArchive.length?tableOf(["Saison","Vainqueur"],ST.seasonArchive.slice().reverse().map((a,i)=>
